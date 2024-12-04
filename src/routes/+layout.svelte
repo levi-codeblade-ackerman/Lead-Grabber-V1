@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	let { children } = $props();
+	let { children, data } = $props();
 	import { onMount } from 'svelte';
 	import { initPocketBase } from '$lib/pocketbase';
 	import { authStore } from '$lib/stores/auth';
@@ -10,9 +10,10 @@
 	import { Toaster } from "$lib/components/ui/sonner/index";
 	import { pb } from '$lib/pocketbase';
 	import { onNavigate } from '$app/navigation';
-
-	let user: AuthModel | null = $state(null);
-
+	$effect(() => {
+		console.log('data', data);
+			console.log('user from layout', data.user);
+	});
 	const unprotectedRoutes = ['/login', '/signup'];
 	
 	onMount(() => {
@@ -36,9 +37,9 @@
 		})
 	// });
 
-	$effect(() => {
-		user = $authStore.user;
-		console.log("user from layour", user)
+	// $effect(() => {
+		// user = $authStore.user;
+		console.log("user from layour", data.user)
 		console.log("authStore", $authStore)
 		
 		// Check auth state on every navigation
@@ -51,7 +52,7 @@
 		// if (user && isAuthRoute) {
 		// 	goto('/', { replaceState: true });
 		// }
-	});
+	// });
 </script>
 
 <svelte:head>
@@ -59,7 +60,7 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
 	<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
 </svelte:head>
-<Toaster />
+<Toaster richColors/>
 <div class="root-layout overflow-hidden">
 	<main>{@render children()}</main>
 </div>

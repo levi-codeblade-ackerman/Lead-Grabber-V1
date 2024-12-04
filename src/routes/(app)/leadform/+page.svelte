@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button/index";
-    import { CodeXml } from "lucide-svelte";
+    import { CodeXml, GripVertical } from "lucide-svelte";
     import { MessageSquare, Phone, Mail, Type, MapPin, List, ChevronDown } from "lucide-svelte";
     import * as Tabs from "$lib/components/ui/tabs/index";
 	import { derived } from "svelte/store";
@@ -13,105 +13,65 @@
     import type { DndEvent } from 'svelte-dnd-action';
     import type { FormElement } from '$lib/stores/formElements';
 	import DraggableFormElement from "$lib/components/DraggableFormElement.svelte";
+    import { toast } from 'svelte-sonner';
 
-    let formData = $state<{
-        name: {
-            value: string,
-            required: boolean
-        },
-        phone: {
-            value: string,
-            required: boolean
-        },
-        email: {
-            value: string,
-            required: boolean
-        },
-        message: {
-            value: string,
-            required: boolean
-        }
-    }>({
-        name: {
-            value: "",
-            required: true
-        },
-        phone: {
-            value: "",
-            required: true
-        },
-        email: {
-            value: "",
-            required: true
-        },
-        message: {
-            value: "",
-            required: true
-        }
-    });
+    let { data } = $props();
+    let user = data.user;
 
-   $effect(() => {
-    console.log(`
-    formData:{
-        name: ${JSON.stringify(formData.name)},
-        phone: ${JSON.stringify(formData.phone)},
-        email: ${JSON.stringify(formData.email)},
-        message: ${JSON.stringify(formData.message)}
-    }
-    `)
-   })
-
-    let settings = $state<{
-        heading: string,
-        intro: string,
-        buttonText: string,
-        buttonColor: string,
-        customConfirmation: {
-            type: 'default' | 'custom',
-            link: string
-        },
-        privacyPolicy: {
-            type: 'default' | 'custom',
-            link: string
-        },
-        customLink: string
-    }>({
-        heading: "Contact Us",
-        intro: "We're here to help! Please connect with us.",
-        buttonText: "Submit",
-        buttonColor: "#2E53D9",
-        customConfirmation: {
+    let settings = $state({
+        heading: data.form?.form_data?.settings?.heading || "Contact Us",
+        intro: data.form?.form_data?.settings?.intro || "We're here to help! Please connect with us.",
+        buttonText: data.form?.form_data?.settings?.buttonText || "Submit",
+        buttonColor: data.form?.form_data?.settings?.buttonColor || "#2E53D9",
+        customConfirmation: data.form?.form_data?.settings?.customConfirmation || {
             type: 'default',
             link: ''
         },
-        privacyPolicy: {
+        privacyPolicy: data.form?.form_data?.settings?.privacyPolicy || {
             type: 'default',
             link: ''
         },
-        customLink: ""
+        customLink: data.form?.form_data?.settings?.customLink || ""
     });
+
+    let formElements = $state<FormElement[]>(
+        data.form?.form_data?.formElements || [
+            {
+                id: 'name',
+                type: 'text',
+                label: 'Name',
+                value: '',
+                required: true,
+                isDefault: true
+            },
+            {
+                id: 'phone',
+                type: 'phone',
+                label: 'Phone',
+                value: '',
+                required: true,
+                isDefault: true
+            },
+            {
+                id: 'email',
+                type: 'email',
+                label: 'Email',
+                value: '',
+                required: true,
+                isDefault: true
+            },
+            {
+                id: 'message',
+                type: 'message',
+                label: 'Message',
+                value: '',
+                required: true,
+                isDefault: true
+            }
+        ]
+    );
 
     let showPreview = $state(false);
-
-    let formElements = $state<FormElement[]>([
-        {
-            id: 'name',
-            type: 'text',
-            label: 'Name',
-            value: '',
-            required: true,
-            isDefault: true
-        },
-        {
-            id: 'phone',
-            type: 'phone', 
-            label: 'Phone',
-            value: '',
-            required: true,
-            isDefault: true
-        },
-        // Add other default fields
-    ]);
 
     function handleDndConsider(e: CustomEvent<DndEvent<FormElement>>) {
     // Check if we're dragging a new element from the sidebar
@@ -166,6 +126,34 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
             icon: ChevronDown
         }
     ];
+
+    // Add function to save form to PocketBase
+    async function saveForm() {
+        try {
+            const formData = new FormData();
+            formData.append('formData', JSON.stringify({
+                settings,
+                formElements,
+                formId: data.formId
+            }));
+
+            const response = await fetch('?/saveForm', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            
+            if (result.type === 'success') {
+                toast.success('Form saved successfully');
+            } else {
+                toast.error('Error saving form.');
+            }
+        } catch (error) {
+            console.error('Error saving form:', error);
+            toast.error('Error saving form. Please try again.');
+        }
+    }
 </script>
 
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
@@ -208,13 +196,17 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
             <Tabs.Content value="editor">
                 <div class="flex gap-4">
                     <!-- Form Editor -->
-                    <div class="flex-1">
-                        <div class="space-y-6 w-full"
-                             use:dndzone={{items: formElements, flipDurationMs: 300}}
-                             onconsider={handleDndConsider}
-                             onfinalize={handleDndFinalize}>
+                    <div class="flex-1 overflow-y-auto" style="max-height: calc(90vh - 200px)">
+                        <div
+                            class="space-y-6 w-full dnd-zone"
+                            use:dndzone={{ items: formElements, flipDurationMs: 300 }}
+                            onconsider={handleDndConsider}
+                            onfinalize={handleDndFinalize}
+                            ondragenter={() => document.querySelector('.dnd-zone').classList.add('dragging-over')}
+                            ondragleave={() => document.querySelector('.dnd-zone').classList.remove('dragging-over')}
+                        >
                             {#each formElements as element (element.id)}
-                                <div animate:flip={{duration: 300}}>
+                                <div animate:flip={{ duration: 300 }}>
                                     <DraggableFormElement 
                                     {element}
                                     onDelete={(id) => {
@@ -237,7 +229,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                         <div class="space-y-2">
                             {#each formElementTypes as type}
                                 <div
-                                    class="w-full p-2 border rounded hover:bg-gray-50 flex items-center gap-2 cursor-move"
+                                    class="w-full px-4 py-2 border rounded hover:bg-gray-50 flex items-center gap-2 cursor-move"
                                     draggable="true"
                                     ondragstart={(e) => {
                                         // Create the new element data
@@ -256,8 +248,13 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                                         formElements = newItems;
                                     }}
                                 >
-                                    <svelte:component this={type.icon} class="w-4 h-4" />
-                                    {type.label}
+                                    <div class="flex items-center justify-between w-full">
+                                        <div class="flex items-center gap-2">
+                                            <svelte:component this={type.icon} class="w-4 h-4" />
+                                            {type.label}
+                                            </div>
+                                            <GripVertical class="w-4 h-4" />
+                                    </div>
                                 </div>
                             {/each}
                         </div>
@@ -365,10 +362,12 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     </div>
 
     <div class="flex justify-start mt-4">
-
-  
-
-        <Button class="bg-primary text-white px-8">Save Changes</Button>
+        <Button 
+            class="bg-primary text-white px-8"
+            onclick={saveForm}
+        >
+            Save Changes
+        </Button>
     </div>
 </div>
 
@@ -391,18 +390,21 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                         {#if element.type === 'text' || element.type === 'phone' || element.type === 'email'}
                             <Input 
                                 type={element.type === 'email' ? 'email' : 'text'}
+                                name={element.id}
                                 placeholder={element.label}
                                 class="h-12 bg-white border-gray-200"
                                 required={element.required}
                             />
                         {:else if element.type === 'message'}
                             <textarea 
+                                name={element.id}
                                 placeholder={element.label}
                                 class="w-full h-24 p-3 bg-white border border-gray-200 rounded-md"
                                 required={element.required}
                             ></textarea>
                         {:else if element.type === 'address'}
                             <textarea 
+                                name={element.id}
                                 placeholder={element.label}
                                 class="w-full h-20 p-3 bg-white border border-gray-200 rounded-md"
                                 required={element.required}
@@ -412,13 +414,19 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                                 <label class="block text-sm font-medium text-gray-700">{element.label}</label>
                                 {#each element.options || [] as option}
                                     <label class="flex items-center gap-2">
-                                        <input type="checkbox" class="rounded border-gray-300">
+                                        <input 
+                                            type="checkbox" 
+                                            name={`${element.id}[]`}
+                                            value={option}
+                                            class="rounded border-gray-300"
+                                        >
                                         <span>{option}</span>
                                     </label>
                                 {/each}
                             </div>
                         {:else if element.type === 'dropdown'}
                             <select 
+                                name={element.id}
                                 class="w-full h-12 px-3 bg-white border border-gray-200 rounded-md"
                                 required={element.required}
                             >

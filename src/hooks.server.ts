@@ -6,6 +6,10 @@ export const handle: Handle = async ({ event, resolve }) => {
     // load the store data from the request cookie string
     pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
 
+    // Set pb instance in locals
+    event.locals.pb = pb;
+    event.locals.user = pb.authStore.model;
+
     try {
         // get an up-to-date auth store state by verifying and refreshing the loaded auth model (if any)
         if (pb.authStore.isValid) {
@@ -18,14 +22,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
 
     // Check if route requires auth
-    console.log("event.url.pathname", event.url.pathname)
     const isProtectedRoute = event.url.pathname !== '/login' && event.url.pathname !== '/signup';
     const isAuthRoute = event.url.pathname === '/login' || event.url.pathname === '/signup';
     const isSignupRoute = event.url.pathname === '/signup';
     
     // Handle protected routes
     if (isProtectedRoute && !pb.authStore.isValid) {
-        console.log("You are not logged in so redirecting to login")
         throw redirect(303, '/login');
     }
     
