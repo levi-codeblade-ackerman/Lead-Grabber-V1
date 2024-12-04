@@ -104,6 +104,13 @@
                     <MessageSquare class="h-4 w-4" />
                 </Button>
             </div>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <Button variant="custom" class="bg-[#3B5BDB] h-14 w-14 rounded-full text-white p-2 flex items-center gap-2">
+                    <MessageSquare class="h-8 w-8" />
+                </Button>
+            </div>
+
         </div>
     </div>
 </div>
