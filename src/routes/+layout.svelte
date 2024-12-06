@@ -10,6 +10,7 @@
 	import { Toaster } from "$lib/components/ui/sonner/index";
 	import { pb } from '$lib/pocketbase';
 	import { onNavigate } from '$app/navigation';
+	import LoadingBar from '$lib/components/loading-bar.svelte';
 	$effect(() => {
 		console.log('data', data);
 			console.log('user from layout', data.user);
@@ -54,6 +55,8 @@
 		// }
 	// });
 </script>
+
+<LoadingBar class="bg-primary" />
 
 <svelte:head>
 	<link rel="preconnect" href="https://fonts.googleapis.com">

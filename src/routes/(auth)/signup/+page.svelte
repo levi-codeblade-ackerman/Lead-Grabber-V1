@@ -4,23 +4,24 @@
     import { Input } from "$lib/components/ui/input";
     import { goto } from '$app/navigation';
     import { toast } from 'svelte-sonner';
+    import Spinner from "$lib/components/ui/spinner.svelte";
     
     export let form;
     let loading = false;
 
     function handleEnhance() {
         return async ({ result }) => {
-            console.log('result', result);
-            loading = true;
-            
-            if (result.type === 'success') {
-                toast.success(result.data.message);
-                await goto('/login');
-            } else {
-                toast.error(result.data.message);
+            try {
+                if (result.type === 'success') {
+                    toast.success(result.data.message);
+                    await goto('/login');
+                } else {
+                    toast.error(result.data.message);
+                    loading = false;
+                }
+            } catch (error) {
+                loading = false;
             }
-            
-            loading = false;
         };
     }
 </script>
@@ -41,7 +42,7 @@
                     <h2 class="text-2xl font-semibold text-gray-900">Sign Up</h2>
                 </div>
 
-                <form method="POST" use:enhance={handleEnhance} class="space-y-6">
+                <form method="POST" use:enhance={handleEnhance} onsubmit={() => loading = true} class="space-y-6">
                     <div>
                         <Input
                             name="email"
@@ -79,9 +80,10 @@
                     <Button
                         type="submit"
                         disabled={loading}
-                        class="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-white font-medium rounded-lg"
+                        class="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-white font-medium rounded-lg flex items-center justify-center gap-2"
                     >
                         {#if loading}
+                            <Spinner />
                             Creating Account...
                         {:else}
                             Sign Up
