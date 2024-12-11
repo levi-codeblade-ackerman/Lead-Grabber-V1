@@ -14,12 +14,14 @@
             try {
                 if (result.type === 'success') {
                     toast.success(result.data.message);
-                    await goto('/');
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    window.location.href = '/';
                 } else {
                     toast.error(result.data.message);
                     loading = false;
                 }
             } catch (error) {
+                console.error('Login error:', error);
                 loading = false;
             }
         };

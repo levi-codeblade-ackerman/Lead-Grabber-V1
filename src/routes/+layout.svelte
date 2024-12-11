@@ -11,49 +11,40 @@
 	import { pb } from '$lib/pocketbase';
 	import { onNavigate } from '$app/navigation';
 	import LoadingBar from '$lib/components/loading-bar.svelte';
-	$effect(() => {
-		console.log('data', data);
-			console.log('user from layout', data.user);
+
+	const publicRoutes = ['/login', '/signup', '/embed/leadbox'];
+	let initialized = $state(false);
+
+	onMount(async () => {
+		await initPocketBase();
+		if (data.user) {
+			authStore.setUser(data.user);
+		}
+		initialized = true;
 	});
-	const unprotectedRoutes = ['/login', '/signup'];
-	
-	onMount(() => {
-        initPocketBase();
-        // authStore.initialize();
-    });
 
-	   // Check if route requires auth
-	   console.log("event.url.pathname", $page.url.pathname)
-    const isProtectedRoute = $page.url.pathname !== '/login' && $page.url.pathname !== '/signup';
-    const isAuthRoute = $page.url.pathname === '/login' || $page.url.pathname === '/signup';
-    const isSignupRoute = $page.url.pathname === '/signup';
-    
-	// $effect(() => {
-		onNavigate(() => {
-		// Handle protected routes
-		if (isProtectedRoute && !pb.authStore.isValid) {
-        console.log("You are not logged in so redirecting to login")
-       goto('/login', { replaceState: true });
+	$effect(() => {
+		if (!initialized) return;
+
+		onNavigate(({ to }) => {
+			if (!to) return;
+			
+			const isPublicRoute = publicRoutes.some(
+				route => to.url.pathname.startsWith(route)
+			);
+			
+			const isAuthenticated = pb.authStore.isValid && pb.authStore.token;
+			
+			// Only redirect if trying to access login while authenticated
+			if (isAuthenticated && to.url.pathname.startsWith('/login')) {
+				goto('/', { replaceState: true });
 			}
-		})
-	// });
-
-	// $effect(() => {
-		// user = $authStore.user;
-		console.log("user from layour", data.user)
-		console.log("authStore", $authStore)
-		
-		// Check auth state on every navigation
-		// const isAuthRoute = $page.url.pathname.startsWith('/(auth)') || 
-		// 				   unprotectedRoutes.includes($page.url.pathname);
-		// if (!user && !isAuthRoute) {
-		// 	goto('/login', { replaceState: true }); // Replace state prevents back navigation
-		// }
-		
-		// if (user && isAuthRoute) {
-		// 	goto('/', { replaceState: true });
-		// }
-	// });
+			// Only redirect to login if accessing protected route while not authenticated
+			else if (!isPublicRoute && !isAuthenticated && !to.url.pathname.startsWith('/login')) {
+				goto('/login', { replaceState: true });
+			}
+		});
+	});
 </script>
 
 <LoadingBar class="bg-primary" />

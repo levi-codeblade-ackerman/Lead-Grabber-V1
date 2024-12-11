@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button/index";
-    import { CodeXml, GripVertical } from "lucide-svelte";
+    import { Check, CodeXml, Copy, GripVertical } from "lucide-svelte";
     import { MessageSquare, Phone, Mail, Type, MapPin, List, ChevronDown } from "lucide-svelte";
     import * as Tabs from "$lib/components/ui/tabs/index";
 	import { derived } from "svelte/store";
@@ -14,6 +14,7 @@
     import type { FormElement } from '$lib/stores/formElements';
 	import DraggableFormElement from "$lib/components/DraggableFormElement.svelte";
     import { toast } from 'svelte-sonner';
+    import { getLeadformEmbedCode } from "$lib/utils/getEmbedCode";
 
     let { data } = $props();
     let user = data.user;
@@ -72,6 +73,8 @@
     );
 
     let showPreview = $state(false);
+    let showEmbedDialog = $state(false);
+    let copied = $state(false);
 
     function handleDndConsider(e: CustomEvent<DndEvent<FormElement>>) {
     // Check if we're dragging a new element from the sidebar
@@ -154,12 +157,23 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
             toast.error('Error saving form. Please try again.');
         }
     }
+
+    function copyEmbedCode() {
+        const embedCode = getLeadformEmbedCode(data.form?.id ?? '');
+        navigator.clipboard.writeText(embedCode);
+        copied = true;
+        toast.success('Embed code copied to clipboard!');
+        setTimeout(() => {
+            copied = false;
+        }, 2000);
+    }
 </script>
 
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
     <div class="flex items-center justify-between">
         <div class="h1 font-semibold text-2xl">Leadform</div>
         <div class="flex gap-2">
+           
             <Button 
                 variant="ghost" 
                 class="gap-2 bg-transparent hover:bg-transparent text-primary hover:text-primary/80"
@@ -167,16 +181,20 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
             >
                 Preview form
             </Button>
-            <Button variant="outline" class="gap-2 bg-transparent border border-primary text-primary rounded-lg hover:text-white">
-                <CodeXml class="h-4 w-4" />
-                Get Embed Code
-            </Button>
+            <Button 
+            variant="outline" 
+            class="gap-2 bg-transparent border border-primary text-primary rounded-lg hover:text-white"
+            onclick={() => showEmbedDialog = true}
+        >
+            <CodeXml class="h-4 w-4" />
+            Get Embed Code
+        </Button>
         </div>
     </div>
 
-    <div class="bg-white rounded-xl p-6 w-full">
+    <div class="bg-white rounded-xl p-6 w-full flex-1 overflow-hidden">
       
-        <Tabs.Root value="editor" >
+        <Tabs.Root value="editor" class="h-full flex flex-col">
             <div class="flex gap-4 mb-6 items-center">
                 <h2 class="text-xl font-semibold text-primary">Contact Form</h2>
                 <div class="flex gap-4 text-gray-500">
@@ -193,10 +211,10 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     
             <p class="text-gray-500 mb-8">Use the builder are below to construct the Leadform</p>
            
-            <Tabs.Content value="editor">
-                <div class="flex gap-4">
+            <Tabs.Content value="editor" class="flex-1 overflow-hidden">
+                <div class="flex gap-4 h-full">
                     <!-- Form Editor -->
-                    <div class="flex-1 overflow-y-auto" style="max-height: calc(90vh - 200px)">
+                    <div class="flex-1 overflow-y-auto">
                         <div
                             class="space-y-6 w-full dnd-zone"
                             use:dndzone={{ items: formElements, flipDurationMs: 300 }}
@@ -224,7 +242,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                     </div>
                     
                     <!-- Form Elements Sidebar -->
-                    <div class="w-64 bg-white p-4 rounded-xl">
+                    <div class="w-64 bg-white p-4 rounded-xl overflow-y-auto">
                         <h3 class="text-lg font-semibold mb-4">Form Elements</h3>
                         <div class="space-y-2">
                             {#each formElementTypes as type}
@@ -261,7 +279,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                     </div>
                 </div>
             </Tabs.Content>
-            <Tabs.Content value="settings" class="space-y-6">
+            <Tabs.Content value="settings" class="flex-1 overflow-y-auto">
                 <div class="flex items-center gap-4 w-full">
    <!-- Heading Section -->
    <div class="space-y-2 w-1/2">
@@ -380,38 +398,40 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
             </Dialog.Description>
         </Dialog.Header>
 
-        <div class="p-6 space-y-6 bg-gray-50 rounded-lg">
+        <div class="clearsky-form w-full">
             <h2 class="text-2xl font-semibold">{settings.heading}</h2>
             <p class="text-gray-600">{settings.intro}</p>
 
-            <form class="space-y-4">
+            <form class="clearsky-form-fields">
                 {#each formElements as element}
                     <div>
                         {#if element.type === 'text' || element.type === 'phone' || element.type === 'email'}
-                            <Input 
+                            <input 
                                 type={element.type === 'email' ? 'email' : 'text'}
                                 name={element.id}
                                 placeholder={element.label}
-                                class="h-12 bg-white border-gray-200"
+                                class="clearsky-input"
                                 required={element.required}
                             />
                         {:else if element.type === 'message'}
                             <textarea 
                                 name={element.id}
                                 placeholder={element.label}
-                                class="w-full h-24 p-3 bg-white border border-gray-200 rounded-md"
+                                class="clearsky-input"
+                                style="min-height: 100px;"
                                 required={element.required}
                             ></textarea>
                         {:else if element.type === 'address'}
                             <textarea 
                                 name={element.id}
                                 placeholder={element.label}
-                                class="w-full h-20 p-3 bg-white border border-gray-200 rounded-md"
+                                class="clearsky-input"
+                                style="min-height: 80px;"
                                 required={element.required}
                             ></textarea>
                         {:else if element.type === 'multiselect'}
                             <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">{element.label}</label>
+                                <label class="block text-sm font-medium">{element.label}</label>
                                 {#each element.options || [] as option}
                                     <label class="flex items-center gap-2">
                                         <input 
@@ -427,7 +447,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                         {:else if element.type === 'dropdown'}
                             <select 
                                 name={element.id}
-                                class="w-full h-12 px-3 bg-white border border-gray-200 rounded-md"
+                                class="clearsky-input"
                                 required={element.required}
                             >
                                 <option value="">{element.label}</option>
@@ -439,13 +459,23 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
                     </div>
                 {/each}
 
-                <Button 
+                <div class="text-sm text-gray-500 mb-4 text-center">
+                    By submitting, you agree to receive text messages at this mobile number. Message & data rates apply. See our <a 
+                        href={settings.privacyPolicy.type === 'custom' ? settings.privacyPolicy.link : '/privacy'} 
+                        target="_blank"
+                        class="text-primary hover:underline"
+                    >
+                        privacy policy
+                    </a>
+                </div>
+
+                <button 
                     type="submit" 
-                    class="w-full"
+                    class="clearsky-button"
                     style="background-color: {settings.buttonColor}"
                 >
                     {settings.buttonText}
-                </Button>
+                </button>
             </form>
         </div>
 
@@ -457,6 +487,42 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     </Dialog.Content>
 </Dialog.Root>
 
+<Dialog.Root bind:open={showEmbedDialog}>
+  <Dialog.Content class="sm:max-w-[70rem]">
+    <Dialog.Header>
+      <Dialog.Title>Embed Code</Dialog.Title>
+      <Dialog.Description>
+        Copy this code and paste it into your website where you want the form to appear.
+      </Dialog.Description>
+    </Dialog.Header>
+    
+    <div class="relative mt-4">
+      <pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
+        {getLeadformEmbedCode(data.form?.id ?? '')}
+      </pre>
+      
+      <Button 
+        variant="outline" 
+        size="icon" 
+        class="absolute top-2 right-2"
+        onclick={copyEmbedCode}
+      >
+        {#if copied}
+          <Check class="h-4 w-4" />
+        {:else}
+          <Copy class="h-4 w-4" />
+        {/if}
+      </Button>
+    </div>
+
+    <Dialog.Footer>
+      <Dialog.Close>
+        <Button variant="outline">Close</Button>
+      </Dialog.Close>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
 <style>
     :global(.dialog-overlay) {
         background-color: rgba(255, 255, 255, 0.9) !important;
@@ -465,6 +531,57 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     :global(.dialog-content) {
         border: 1px solid #e5e7eb !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    }
+    :global(.clearsky-form) {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 32rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+    }
+    :global(.clearsky-form h2) {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    :global(.clearsky-form p) {
+        color: #6B7280;
+        margin-bottom: 1.5rem;
+    }
+    :global(.clearsky-form-fields) {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    :global(.clearsky-input) {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #E5E7EB;
+        background-color: #FFF;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+    }
+    :global(.clearsky-input:focus) {
+        outline: 2px solid var(--button-color);
+        outline-offset: 2px;
+    }
+    :global(.clearsky-button) {
+        width: 100%;
+        padding: 0.75rem;
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    :global(.clearsky-button:hover) {
+        opacity: 0.9;
+    }
+    :global(.clearsky-terms) {
+        margin-top: 1rem;
+        text-align: center;
+        font-size: 0.75rem;
+        color: #6B7280;
     }
 </style>
 

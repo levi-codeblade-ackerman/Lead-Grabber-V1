@@ -4,12 +4,17 @@
 
 <script lang="ts">
 	import NavMain from "$lib/components/nav-main.svelte";
-	import SidebarOptInForm from "$lib/components/sidebar-opt-in-form.svelte";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import GalleryVerticalEnd from "lucide-svelte/icons/gallery-vertical-end";
-	import type { ComponentProps } from "svelte";
+	import { LogOut } from "lucide-svelte";
+	import { goto } from "$app/navigation";
+	import { pb } from "$lib/pocketbase";
 
-	let { ref = $bindable(null), ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+	let { ref = $bindable(null), ...restProps } = $props();
+
+	function handleLogout() {
+		pb.authStore.clear();
+		goto('/login');
+	}
 </script>
 
 <Sidebar.Root bind:ref {...restProps}>
@@ -28,7 +33,17 @@
 		<NavMain />
 	</Sidebar.Content>
 	<Sidebar.Footer>
-
+		<Sidebar.Menu>
+			<Sidebar.MenuItem>
+				<Sidebar.MenuButton 
+					onclick={handleLogout}
+					class=" hover:text-red-700 hover:bg-red-50"
+				>
+					<LogOut class="w-5 h-5" />
+					<span>Logout</span>
+				</Sidebar.MenuButton>
+			</Sidebar.MenuItem>
+		</Sidebar.Menu>
 	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>
