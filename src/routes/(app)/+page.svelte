@@ -62,9 +62,18 @@ const chatMessages = [
     <div class="h1 font-semibold text-2xl">Inbox</div>
     
     <div class="w-full h-[61px] bg-white rounded-lg px-8 flex items-center justify-between">
-        <h3 class="text-xl font-normal leading-8">
-            All
-        </h3>
+        <div class="flex items-center gap-14">
+            <h3 class="text-xl font-normal leading-8">
+                All
+            </h3>
+            <h3 class="text-xl font-normal leading-8">
+                Unassigned
+            </h3>
+            <h3 class="text-xl font-normal leading-8">
+                Me
+            </h3>
+        </div>
+    
         <div class="actions flex items-center gap-2">
            
           <HeaderTag />
