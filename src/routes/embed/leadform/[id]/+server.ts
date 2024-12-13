@@ -1,6 +1,7 @@
 import { pb } from '$lib/pocketbase';
 import { error } from '@sveltejs/kit';
 import type { LeadForm } from '$lib/types/leadform';
+import { PUBLIC_BASE_URL } from "$env/static/public";
 
 export async function GET({ params, request, locals }) {
   try {
@@ -11,7 +12,7 @@ export async function GET({ params, request, locals }) {
       {
         $autoCancel: false,
         requestKey: null,
-        fields: 'id,form_data'
+        fields: 'id,form_data,owner,expand.owner.company_id'
       }
     );
 
@@ -26,6 +27,9 @@ export async function GET({ params, request, locals }) {
     const jsCode = `
       (function() {
         const formData = ${JSON.stringify(formData)};
+        const formOwner = "${form.owner}";
+        const companyId = "${form.expand?.owner?.company_id}";
+        const baseUrl = "${PUBLIC_BASE_URL}";
         
         function addStyles() {
           const style = document.createElement('style');
@@ -162,20 +166,63 @@ export async function GET({ params, request, locals }) {
           addStyles();
         }
 
-        function handleSubmit(event) {
+        async function handleSubmit(event) {
           event.preventDefault();
           const form = event.target;
-          const formData = new FormData(form);
-          const data = Object.fromEntries(formData);
+          const submitFormData = new FormData(form);
+          const data = Object.fromEntries(submitFormData);
 
-          // Here you can add the logic to submit the form data to your backend
-          console.log('Form submitted:', data);
+          try {
+            const initials = data.name 
+              ? data.name.split(' ').map(n => n[0]).join('').toUpperCase() 
+              : '??';
 
-          // Show success message or redirect
-          if (formData.settings.customConfirmation.type === 'custom' && formData.settings.customConfirmation.link) {
-            window.location.href = formData.settings.customConfirmation.link;
-          } else {
-            form.innerHTML = '<div style="text-align: center; padding: 2rem;"><h3>Thank you!</h3><p>Your submission has been received.</p></div>';
+            const messageContent = Object.entries(data)
+              .map(([key, value]) => \`\${key}: \${value}\`)
+              .join('\\n');
+
+            const messageData = {
+              customer_name: data.name || "Anonymous",
+              customer_email: data.email || "",
+              customer_phone: data.phone || "",
+              message: messageContent,
+              source: "leadform",
+              status: "new",
+              thread_id: crypto.randomUUID(),
+              source_url: window.location.href,
+              company_id: companyId || formOwner,
+              created: new Date().toISOString(),
+              initials: initials,
+              color: "bg-primary"
+            };
+
+            console.log('Sending message data:', messageData);
+
+            const response = await fetch(\`\${baseUrl}/api/messages\`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(messageData)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error('Server error:', errorData);
+              throw new Error('Failed to send message: ' + (errorData.message || response.statusText));
+            }
+
+            if (formData.settings?.customConfirmation?.type === "custom" && 
+                formData.settings?.customConfirmation?.link) {
+              window.location.href = formData.settings.customConfirmation.link;
+            } else {
+              form.innerHTML = '<div style="text-align: center; padding: 2rem;">' +
+                '<h3>Thank you!</h3><p>Your submission has been received.</p></div>';
+            }
+          } catch (error) {
+            console.error('Error submitting form:', error);
+            form.innerHTML = '<div style="text-align: center; padding: 2rem; color: #EF4444;">' +
+              '<h3>Error</h3><p>There was an error submitting your form. Please try again.</p></div>';
           }
         }
 

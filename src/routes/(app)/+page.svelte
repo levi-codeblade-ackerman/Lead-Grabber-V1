@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import HeaderClose from "$lib/components/header-close.svelte";
 	import HeaderReminder from "$lib/components/header-reminder.svelte";
 	import HeaderShuffle from "$lib/components/header-shuffle.svelte";
@@ -6,56 +6,147 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       import { Button } from "$lib/components/ui/button/index";
       import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index";
       import { Bell, CheckCircle2, Images, MessageSquareText, Plus, Shuffle, Smile, Tag } from "lucide-svelte";
+      import { onMount, onDestroy } from 'svelte';
+      import { pb } from '$lib/pocketbase';
 
-      // Add message data
-      const messages = [
-          {
-              initials: "RD",
-              name: "Rory Dredhart",
-              message: "Hello guys",
-              time: "10:20PM",
-              color: "bg-primary"
-          },
-          {
-              initials: "CG",
-              name: "Cris George",
-              message: "Hello guys",
-              time: "10:20PM",
-              color: "bg-primary"
-          },
-          {
-              initials: "JP",
-              name: "Jake Paul",
-              message: "Hi nice to meet you",
-              time: "08:45PM",
-              color: "bg-primary"
-          }
-      ];
+      let { data } = $props();
+      
+      // Add message data store
+      let messages = $state([]);
+      let selectedMessage = $state(null);
+      let showMessages = $state(true);
+      let chatMessages = $state([]);
 
-      let showMessages = true;
+      // Add unsubscribe function to clean up subscription
+      let unsubscribe: () => void;
 
-// Add chat messages
-const chatMessages = [
-    {
-        sender: "John",
-        message: "Hello John",
-        time: "Just now",
-        isYou: false
-    },
-    {
-        sender: "You",
-        message: "Sure thing, I'll have a look today. They're looking great!",
-        time: "Just now",
-        isYou: true
-    },
-    {
-        sender: "John Max",
-        message: "Hey Olivia, can you please review the latest design when you can?",
-        time: "Today 2:20pm",
-        isYou: false
-    },
-    
-];
+      onMount(async () => {
+        try {
+          // Initial load of messages with better error handling
+          const records = await pb.collection('messages').getList(1, 50, {
+            sort: '-created',
+            filter: `company_id = "${data.user?.company_id}"`,
+            expand: 'customer_id'
+          });
+
+          console.log('Loaded messages:', records.items); // Debug log
+
+          messages = records.items.map(formatMessage);
+
+          // Subscribe to realtime messages with proper error handling
+          unsubscribe = pb.collection('messages').subscribe('*', function(e) {
+            console.log('Realtime event:', e); // Debug log
+            
+            try {
+              if (e.action === 'create') {
+                // Check if message belongs to company
+                if (e.record.company_id === data.user?.company_id) {
+                  const newMessage = formatMessage(e.record);
+                  messages = [newMessage, ...messages];
+
+                  // If this message belongs to the current thread, add it to chat
+                  if (selectedMessage && e.record.thread_id === selectedMessage.thread_id) {
+                    const newChatMessage = formatChatMessage(e.record);
+                    chatMessages = [...chatMessages, newChatMessage];
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('Error processing realtime message:', err);
+            }
+          });
+
+        } catch (err) {
+          console.error('Error loading messages:', err);
+        }
+      });
+
+      // Cleanup subscription on component destroy
+      onDestroy(() => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      });
+
+      // Helper function to format message consistently
+      function formatMessage(msg) {
+        return {
+          initials: msg.initials || (msg.customer_name?.split(' ').map(n => n[0]).join('') || '??'),
+          name: msg.customer_name || 'Unknown',
+          message: msg.message,
+          time: new Date(msg.created).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          color: msg.color || 'bg-primary',
+          id: msg.id,
+          thread_id: msg.thread_id,
+          created: msg.created // Keep original date for sorting
+        };
+      }
+
+      // Helper function to format chat message
+      function formatChatMessage(chat) {
+        return {
+          sender: chat.customer_name || 'Unknown',
+          message: chat.message,
+          time: new Date(chat.created).toLocaleString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            month: 'short',
+            day: 'numeric'
+          }),
+          isYou: chat.company_id === data.user?.company_id
+        };
+      }
+
+      // Function to select a message and load its chat history
+      async function selectMessage(msg) {
+        selectedMessage = msg;
+        showMessages = true;
+        
+        try {
+          const records = await pb.collection('messages').getList(1, 50, {
+            sort: 'created',
+            filter: `thread_id = "${msg.thread_id}"`,
+            expand: 'customer_id'
+          });
+
+          chatMessages = records.items.map(formatChatMessage);
+
+        } catch (err) {
+          console.error('Error loading chat history:', err);
+        }
+      }
+
+      // Function to send a new message
+      async function sendMessage(event) {
+        if (!selectedMessage) return;
+        
+        const input = event.target.querySelector('input');
+        const message = input.value.trim();
+        if (!message) return;
+
+        try {
+          const messageData = {
+            customer_name: data.user?.name || 'Support Agent',
+            message: message,
+            thread_id: selectedMessage.thread_id,
+            company_id: data.user?.company_id,
+            status: 'replied',
+            source: 'web',
+            created: new Date().toISOString(),
+            initials: data.user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '??',
+            color: 'bg-primary'
+          };
+
+          await pb.collection('messages').create(messageData);
+          input.value = '';
+
+        } catch (err) {
+          console.error('Error sending message:', err);
+        }
+      }
 </script>
 
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
@@ -88,7 +179,10 @@ const chatMessages = [
             <div class="flex-1 overflow-y-auto">
                 <div class="flex flex-col divide-y px-5">
                     {#each messages as msg}
-                        <div class="flex items-center gap-4 py-4">
+                        <div 
+                          class="flex items-center gap-4 py-4 cursor-pointer hover:bg-gray-50"
+                          onclick={() => selectMessage(msg)}
+                        >
                             <div class="flex-shrink-0">
                                 <div class="w-14 h-14 rounded-full {msg.color} text-white flex items-center justify-center text-xl">
                                     {msg.initials}
@@ -142,31 +236,41 @@ const chatMessages = [
                 {/if}
             </div>
 
-            <div class="border-t p-4">
+            <form 
+              class="border-t p-4"
+              onsubmit={e => {
+                e.preventDefault();
+                sendMessage(e);
+              }}
+            >
                 <div class="flex gap-4 mb-4">
                     <button class="text-primary border-b-2 border-primary pb-2">Message</button>
-                    <button class=" pb-2">Note</button>
+                    <button class="pb-2">Note</button>
                 </div>
                 <div class="w-full">
-                    <input type="text" placeholder="Type a message..." class="flex-1 bg-transparent py-3 focus:outline-none w-full">
+                    <input 
+                      type="text" 
+                      placeholder="Type a message..." 
+                      class="flex-1 bg-transparent py-3 focus:outline-none w-full"
+                      disabled={!selectedMessage}
+                    >
                 </div>
-                <div class="flex gap-2 ">
-                    <div class="flex items-center gap-2 rounded-lg  w-full justify-between">
+                <div class="flex gap-2">
+                    <div class="flex items-center gap-2 rounded-lg w-full justify-between">
                         <div class="flex items-center gap-6">
-                          
-                                <Smile class="h-5 w-5 " />
-                           
-                          
-                                <Images class="h-5 w-5 " />
-                           
+                            <Smile class="h-5 w-5" />
+                            <Images class="h-5 w-5" />
                         </div>
-                        <Button class="bg-primary hover:bg-blue-700 text-white px-6 text-sm font-semibold">
+                        <Button 
+                          type="submit"
+                          class="bg-primary hover:bg-blue-700 text-white px-6 text-sm font-semibold"
+                          disabled={!selectedMessage}
+                        >
                             SEND
                         </Button>
                     </div>
-                  
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 </div>

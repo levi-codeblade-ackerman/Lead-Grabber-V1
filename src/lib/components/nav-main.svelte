@@ -2,11 +2,12 @@
 	import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 	import { useSidebar } from "$lib/components/ui/sidebar/index.js";
-	import { Home, Users, ChartColumnBig, Smartphone, BookOpen, Settings, ChevronDown, ChevronUp, SquareSlash, Reply } from "lucide-svelte";
+	import { Home, Users, ChartColumnBig, Smartphone, BookOpen, Settings, ChevronDown, ChevronUp, SquareSlash, Reply, Building } from "lucide-svelte";
 	import { page } from "$app/stores";
     import { Button } from "$lib/components/ui/button/index";
 	import { slide } from "svelte/transition";
-
+	const { user } = $props();
+	let isCompany = $state(user.company_id && user.company_id !== '');
 
 	let items = $state([
 		{ title: "Inbox", url: "/inbox", icon: Home, href: "/" },
@@ -17,7 +18,9 @@
 		{ title: "Settings", url: "/settings", icon: Settings, href: "/settings", 
 			subItems: [
 				{ title: "Auto Replies", url: "/settings/auto-replies", icon: Reply, href: "/settings/auto-replies" },
-				{ title: "Shortcuts", url: "/settings/shortcuts", icon: SquareSlash, href: "/settings/shortcuts" }
+				{ title: "Shortcuts", url: "/settings/shortcuts", icon: SquareSlash, href: "/settings/shortcuts" },
+				...(isCompany ? [] : [{ title: "Create Company", url: "/create-company", icon: Building, href: "/create-company" }]),
+				...(isCompany ? [{ title: "Company", url: "/settings/company", icon: Building, href: "/settings/company" }] : []),
 			]
 		 },
 	]);

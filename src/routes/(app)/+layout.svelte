@@ -4,12 +4,16 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { MessageSquareText, Search } from 'lucide-svelte';
-	let { children } = $props();
-
+	interface $$Props {
+		children: any;
+		data: { user: any };
+	}
+	let { children, data } = $props();
+	let { user } = data;
 </script>
 
 <Sidebar.Provider>
-	<AppSidebar/>
+	<AppSidebar {user}/>
 	<Sidebar.Inset class="border-none">
 		<header class="flex py-4 shrink-0 items-center gap-2 border-b px-4 border-none">
             <div class="flex px-6 py-3 bg-white w-full rounded-lg justify-between">

@@ -1,6 +1,7 @@
 import { pb } from '$lib/pocketbase';
 import { error } from '@sveltejs/kit';
 import type { Leadbox, LeadboxData } from '$lib/types/leadbox';
+import { PUBLIC_BASE_URL } from "$env/static/public";
 
 export async function GET({ params, request, locals }) {
   try {
@@ -11,7 +12,7 @@ export async function GET({ params, request, locals }) {
       {
         $autoCancel: false,
         requestKey: null,
-        fields: 'id,leadbox_data'
+        fields: 'id,leadbox_data,owner'
       }
     );
     console.log(leadbox);
@@ -27,6 +28,9 @@ export async function GET({ params, request, locals }) {
     const jsCode = `
       (function() {
         const leadboxData = ${JSON.stringify({ ...leadboxData, leadBoxOpen: false })};
+        const leadboxOwner = "${leadbox.owner}";
+        const baseUrl = "${PUBLIC_BASE_URL}";
+        
         console.log('leadboxData', leadboxData);
         
         function addStyles() {
@@ -195,7 +199,11 @@ export async function GET({ params, request, locals }) {
               class="clearsky-button" 
               type="button" 
               style="background-color: \${channel.buttonColor};"
-              onclick="window.open('\${channel.url}', '\${channel.target || '_blank'}')"
+              onclick="handleChannelClick('\${channel.url}', '\${channel.target || '_blank'}', \${JSON.stringify({
+                name: channel.name,
+                value: channel.value,
+                url: channel.url
+              })})"
             >
               \${channel.showIcon ? createChannelIcon(channel.icon) : ''}
               \${channel.value}
@@ -343,10 +351,63 @@ export async function GET({ params, request, locals }) {
           }
         }
 
+        async function handleChannelClick(url, target, channelData) {
+          try {
+            const messageData = {
+              customer_name: "",
+              customer_email: "",
+              customer_phone: "",
+              message: \`Channel clicked: \${channelData.name} - \${channelData.value}\`,
+              source: "leadbox",
+              status: "new",
+              thread_id: crypto.randomUUID(),
+              source_url: window.location.href,
+              company_id: leadboxOwner
+            };
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            try {
+              const response = await fetch(\`\${baseUrl}/api/messages\`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(messageData),
+                mode: 'cors',
+                signal: controller.signal
+              });
+
+              clearTimeout(timeoutId);
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                console.error('Server error:', errorData?.error || response.status);
+              }
+            } catch (fetchError) {
+              if (fetchError.name === 'AbortError') {
+                console.error('Request timed out');
+              } else {
+                console.error('Network error:', fetchError);
+              }
+            }
+
+            // Always open the URL, even if message creation fails
+            window.open(url, target);
+          } catch (error) {
+            console.error('Error in handleChannelClick:', error);
+            window.open(url, target);
+          }
+        }
+
         function createLeadbox() {
           const container = document.createElement('div');
           container.id = 'clearsky-leadbox-${params.id}';
           container.className = 'clearsky-container';
+          
+          // Add handleChannelClick to window object
+          window.handleChannelClick = handleChannelClick;
           
           container.innerHTML = createClosedLeadbox();
           

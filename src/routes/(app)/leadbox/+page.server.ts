@@ -1,18 +1,24 @@
 import { pb } from '$lib/pocketbase';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 
 export const load = async ({ locals }) => {
     const user = locals.user;
     
     if (!user) {
-        return {
-            user: null,
-            leadbox: null
-        };
+        throw redirect(303, '/login');
     }
 
     try {
+        // Check if user has a company
+        const companies = await pb.collection('companies').getList(1, 1, {
+            filter: `owner = "${user.id}"`,
+        });
+
+        if (companies.items.length === 0) {
+            throw redirect(303, '/create-company');
+        }
+
         // Fetch the user's existing leadbox
         const existingLeadboxes = await pb.collection('leadboxes').getList(1, 1, {
             filter: `owner = "${user.id}"`,

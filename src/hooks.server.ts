@@ -7,7 +7,8 @@ const publicRoutes = [
   '/signup',
   '/',
   '/embed/leadbox',
-  '/api/public'  // Add any other public routes
+  '/api/public',
+  '/api/messages'  // Add this line
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {

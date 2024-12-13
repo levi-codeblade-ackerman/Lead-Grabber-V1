@@ -1,5 +1,4 @@
 <script lang="ts" module>
-
 </script>
 
 <script lang="ts">
@@ -9,8 +8,8 @@
 	import { goto } from "$app/navigation";
 	import { pb } from "$lib/pocketbase";
 
-	let { ref = $bindable(null), ...restProps } = $props();
-
+	let { user, ref = $bindable(null), ...restProps } = $props();
+	console.log("user from sidebar", user);
 	function handleLogout() {
 		pb.authStore.clear();
 		goto('/login');
@@ -30,7 +29,7 @@
 		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavMain />
+		<NavMain {user} />
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<Sidebar.Menu>

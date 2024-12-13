@@ -160,6 +160,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
 
     function copyEmbedCode() {
         const embedCode = getLeadformEmbedCode(data.form?.id ?? '');
+        console.log("embedCode", embedCode);
         navigator.clipboard.writeText(embedCode);
         copied = true;
         toast.success('Embed code copied to clipboard!');
@@ -169,6 +170,7 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     }
 </script>
 
+{#if user.company_id && user.company_id !== ''}
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
     <div class="flex items-center justify-between">
         <div class="h1 font-semibold text-2xl">Leadform</div>
@@ -388,6 +390,17 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
         </Button>
     </div>
 </div>
+{:else}
+<div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100 items-center justify-center">
+    <div class="h1 font-semibold text-2xl">Leadform</div>
+    <p class="text-gray-500 text-sm mb-4">You need to create a company first</p>
+    <Button
+    href="/create-company"
+    variant="custom" class="bg-primary text-white px-8">
+        Create Company
+    </Button>
+</div>
+{/if}
 
 <Dialog.Root bind:open={showPreview}>
     <Dialog.Content class="max-w-2xl">

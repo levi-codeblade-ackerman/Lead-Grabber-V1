@@ -1,40 +1,72 @@
-import { fail } from '@sveltejs/kit';
 import { pb } from '$lib/pocketbase';
+import { fail, redirect } from '@sveltejs/kit';
+import type { Actions } from './$types';
 
-export const actions = {
-    default: async ({ request }) => {
-        const data = await request.formData();
-        const email = data.get('email') as string;
-        const password = data.get('password') as string;
-        const passwordConfirm = data.get('passwordConfirm') as string;
-
-        if (password !== passwordConfirm) {
-            return fail(400, {
-                success: false,
-                message: 'Passwords do not match'
-            });
-        }
-
+export const actions: Actions = {
+    default: async ({ request, cookies }) => {
         try {
-            let user = await pb.collection('users').create({
+            const data = await request.formData();
+            const email = data.get('email')?.toString();
+            const password = data.get('password')?.toString();
+            const passwordConfirm = data.get('passwordConfirm')?.toString();
+            const name = data.get('name')?.toString();
+
+            if (!email || !password || !passwordConfirm || !name) {
+                return fail(400, {
+                    success: false,
+                    message: 'All fields are required'
+                });
+            }
+
+            if (password !== passwordConfirm) {
+                return fail(400, {
+                    success: false,
+                    message: 'Passwords do not match'
+                });
+            }
+
+            // Create user
+            const user = await pb.collection('users').create({
                 email,
-                emailVisibility: true,
                 password,
                 passwordConfirm,
-                username: email.split('@')[0],
+                name,
+                emailVisibility: true
             });
 
-            console.log('user created', user);
+            // Log the user in
+            await pb.collection('users').authWithPassword(email, password);
+
+            // Set the auth cookie
+            cookies.set('pb_auth', pb.authStore.exportToCookie(), {
+                path: '/',
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 30 // 30 days
+            });
 
             return {
                 success: true,
                 message: 'Account created successfully'
             };
-        } catch (err: any) {
-            console.log('err', err);
+        } catch (error: any) {
+            console.error('Signup error:', error);
+            let errorMessage = 'Error creating account';
+            
+            if (error.response?.data) {
+                const data = error.response.data;
+                if (data.email) {
+                    errorMessage = 'Email is already in use';
+                } else if (data.username) {
+                    errorMessage = 'Username is already in use';
+                } else {
+                    errorMessage = Object.values(data).join('; ');
+                }
+            }
+            
             return fail(400, {
                 success: false,
-                message: err.response?.message || 'Failed to create account'
+                message: errorMessage
             });
         }
     }

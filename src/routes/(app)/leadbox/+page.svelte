@@ -16,6 +16,7 @@
 
     let { data } = $props();
     let user = data.user;
+    console.log("user", user);
 
     // Initialize state from saved data or defaults
     let textOnly = $state(data.leadbox?.leadbox_data?.textOnly ?? true);
@@ -103,6 +104,7 @@
     });
 </script>
 
+{#if user.company_id && user.company_id !== ''}
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
     <div class="flex items-center justify-between w-full">
         <div class="h1 font-semibold text-2xl">Leadbox</div>
@@ -367,6 +369,17 @@
         </form>
     </div>
 </div>
+{:else}
+<div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100 items-center justify-center">
+    <div class="h1 font-semibold text-2xl">Leadbox</div>
+    <p class="text-gray-500 text-sm mb-4">You need to create a company first</p>
+    <Button
+    href="/create-company"
+    variant="custom" class="bg-primary text-white px-8">
+        Create Company
+    </Button>
+</div>
+{/if}
 
 <Dialog.Root bind:open={showEmbedDialog}>
   <Dialog.Content class="sm:max-w-[70rem]">

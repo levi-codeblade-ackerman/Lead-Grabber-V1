@@ -1,5 +1,6 @@
 import PocketBase from 'pocketbase';
 import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
+import { goto } from '$app/navigation';
 
 export const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
 
@@ -20,6 +21,7 @@ export const initPocketBase = async () => {
         }
     } catch (error) {
         console.error('PocketBase init error:', error);
+        goto('/login');
         pb.authStore.clear();
     }
 }; 
