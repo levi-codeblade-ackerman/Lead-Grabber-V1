@@ -26,24 +26,20 @@
 	$effect(() => {
 		if (!initialized) return;
 
-		onNavigate(({ to }) => {
-			if (!to) return;
-			
-			const isPublicRoute = publicRoutes.some(
-				route => to.url.pathname.startsWith(route)
-			);
-			
-			const isAuthenticated = pb.authStore.isValid && pb.authStore.token;
-			
-			// Only redirect if trying to access login while authenticated
-			if (isAuthenticated && to.url.pathname.startsWith('/login')) {
-				goto('/', { replaceState: true });
-			}
-			// Only redirect to login if accessing protected route while not authenticated
-			else if (!isPublicRoute && !isAuthenticated && !to.url.pathname.startsWith('/login')) {
-				goto('/login', { replaceState: true });
-			}
-		});
+		const isPublicRoute = publicRoutes.some(
+			route => $page.url.pathname.startsWith(route)
+		);
+		
+		const isAuthenticated = pb.authStore.isValid && pb.authStore.token;
+		
+		// Redirect to login if accessing protected route while not authenticated
+		if (!isPublicRoute && !isAuthenticated) {
+			goto('/login', { replaceState: true });
+		}
+		// Redirect to home if accessing login while authenticated
+		else if (isAuthenticated && $page.url.pathname.startsWith('/login')) {
+			goto('/', { replaceState: true });
+		}
 	});
 </script>
 

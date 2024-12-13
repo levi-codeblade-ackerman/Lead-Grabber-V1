@@ -8,10 +8,13 @@ const publicRoutes = [
   '/',
   '/embed/leadbox',
   '/api/public',
-  '/api/messages'  // Add this line
+  '/api/messages'
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {
+  // Clear auth store at the start of each request to prevent state persistence
+  pb.authStore.clear();
+  
   const isPublicRoute = publicRoutes.some(route => 
     event.url.pathname.startsWith(route)
   );
@@ -19,24 +22,34 @@ export const handle: Handle = async ({ event, resolve }) => {
   try {
     // Load auth from cookie
     const cookie = event.request.headers.get('cookie');
-    if (cookie) {
-      pb.authStore.loadFromCookie(cookie);
+    const pbAuthCookie = cookie?.split(';')
+      .find(c => c.trim().startsWith('pb_auth='));
+    
+    if (pbAuthCookie) {
+      pb.authStore.loadFromCookie(`${pbAuthCookie.trim()}`);
     }
     
     event.locals.pb = pb;
-    event.locals.user = pb.authStore.model;
+    event.locals.user = null; // Reset user
 
-    // Only try to refresh if we have a valid token and it's not a public route
-    if (pb.authStore.isValid && !isPublicRoute) {
+    // Verify the token is valid
+    if (pb.authStore.isValid) {
       try {
-        await pb.collection('users').authRefresh();
-      } catch (refreshError) {
-        // If refresh fails, clear auth and redirect to login
+        // Verify and refresh token
+        const authData = await pb.collection('users').authRefresh();
+        event.locals.user = authData.record;
+      } catch (err) {
+        // If refresh fails, clear everything
         pb.authStore.clear();
-        event.locals.user = null;
-        throw redirect(303, '/login');
+        event.cookies.delete('pb_auth', { path: '/' });
       }
     }
+
+    // If not public route and no valid user, redirect to login
+    if (!isPublicRoute && !event.locals.user) {
+      throw redirect(303, '/login');
+    }
+
   } catch (error) {
     if (!isPublicRoute) {
       pb.authStore.clear();
@@ -48,7 +61,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   const response = await resolve(event);
 
-  if (pb.authStore.isValid) {
+  // Only set cookie if we have a valid user
+  if (event.locals.user && pb.authStore.isValid) {
     response.headers.append('set-cookie', pb.authStore.exportToCookie({
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',

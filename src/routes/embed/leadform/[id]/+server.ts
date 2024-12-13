@@ -7,14 +7,16 @@ export async function GET({ params, request, locals }) {
   try {
     pb.authStore.clear();
 
-    const form = await pb.collection('leadforms').getOne<LeadForm>(
-      params.id,
-      {
-        $autoCancel: false,
-        requestKey: null,
-        fields: 'id,form_data,owner,expand.owner.company_id'
-      }
-    );
+    let form;
+    if (params.id === 'default') {
+      // Get the most recently created form
+      const forms = await pb.collection('leadforms').getList(1, 1, {
+        sort: '-created'
+      });
+      form = forms.items[0];
+    } else {
+      form = await pb.collection('leadforms').getOne(params.id);
+    }
 
     if (!form) {
       throw error(404, 'Form not found');

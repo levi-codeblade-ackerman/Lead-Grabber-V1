@@ -7,15 +7,16 @@ export async function GET({ params, request, locals }) {
   try {
     pb.authStore.clear();
 
-    const leadbox = await pb.collection('leadboxes').getOne<Leadbox>(
-      params.id,
-      {
-        $autoCancel: false,
-        requestKey: null,
-        fields: 'id,leadbox_data,owner'
-      }
-    );
-    console.log(leadbox);
+    let leadbox;
+    if (params.id === 'default') {
+      // Get the most recently created leadbox
+      const leadboxes = await pb.collection('leadboxes').getList(1, 1, {
+        sort: '-created'
+      });
+      leadbox = leadboxes.items[0];
+    } else {
+      leadbox = await pb.collection('leadboxes').getOne(params.id);
+    }
 
     if (!leadbox) {
       throw error(404, 'Leadbox not found');
