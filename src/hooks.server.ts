@@ -1,20 +1,14 @@
 import { pb } from '$lib/pocketbase';
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
+import { isTokenNearExpiry } from '$lib/pocketbase';
 
 const publicRoutes = [
   '/login',
   '/signup',
-  '/',
-  '/embed/leadbox',
-  '/api/public',
-  '/api/messages'
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {
-  // Clear auth store at the start of each request to prevent state persistence
-  pb.authStore.clear();
-  
   const isPublicRoute = publicRoutes.some(route => 
     event.url.pathname.startsWith(route)
   );
@@ -27,8 +21,23 @@ export const handle: Handle = async ({ event, resolve }) => {
     
     if (pbAuthCookie) {
       pb.authStore.loadFromCookie(`${pbAuthCookie.trim()}`);
+      
+      // Only refresh if token exists but is close to expiring
+      if (pb.authStore.isValid && isTokenNearExpiry(pb.authStore.token)) {
+        try {
+          const authData = await pb.collection('users').authRefresh();
+          event.locals.user = authData.record;
+        } catch (err) {
+          // Only clear on refresh failure
+          pb.authStore.clear();
+          event.cookies.delete('pb_auth', { path: '/' });
+        }
+      } else if (pb.authStore.isValid) {
+        // If token is valid and not near expiry, just set the user
+        event.locals.user = pb.authStore.model;
+      }
     }
-    
+
     event.locals.pb = pb;
     event.locals.user = null; // Reset user
 

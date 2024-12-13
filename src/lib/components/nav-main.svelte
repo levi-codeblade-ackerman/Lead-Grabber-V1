@@ -7,7 +7,7 @@
     import { Button } from "$lib/components/ui/button/index";
 	import { slide } from "svelte/transition";
 	const { user } = $props();
-	let isCompany = $state(user.company_id && user.company_id !== '');
+	let isCompany = $state(user?.company_id && user?.company_id !== '');
 
 	let items = $state([
 		{ title: "Inbox", url: "/inbox", icon: Home, href: "/" },
@@ -36,6 +36,13 @@
 				<a 
 					href={mainItem.href}
 					class="w-full"
+					onclick={(e) => {
+						if (mainItem.subItems) {
+							e.preventDefault();
+							e.stopPropagation();
+							expanded = !expanded;
+						}
+					}}
 				>
 					<Sidebar.MenuButton 
 						class="!py-7 flex items-center gap-3 pl-9 hover:bg-white font-medium w-full {$page.url.pathname === mainItem.href ? 'bg-white text-primary' : ''}"
@@ -43,13 +50,7 @@
 						<mainItem.icon class="!w-6 !h-6" />
 						{mainItem.title}
 						{#if mainItem.subItems}
-							<Button variant="ghost" class="ml-auto"
-							onclick={(e) => {
-								e.stopPropagation();
-								e.preventDefault();
-								expanded = !expanded;
-							}}
-							>
+							<Button variant="ghost" class="ml-auto">
 								{#if expanded}
 									<ChevronUp class="w-5 h-5 ml-auto" />
 								{:else}

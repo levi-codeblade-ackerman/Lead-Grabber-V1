@@ -4,12 +4,23 @@ import { goto } from '$app/navigation';
 
 export const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
 
-export const initPocketBase = async () => {
-    // Clear any existing auth state
-    pb.authStore.clear();
+// Add helper to check token expiry
+export function isTokenNearExpiry(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expiryTime = payload.exp * 1000; // Convert to milliseconds
+    const currentTime = Date.now();
+    const timeUntilExpiry = expiryTime - currentTime;
     
+    // Return true if token expires in less than 5 minutes
+    return timeUntilExpiry < 5 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+export const initPocketBase = async () => {
     try {
-        // Load auth state from cookies
         const cookie = document.cookie
             .split('; ')
             .find(row => row.startsWith('pb_auth='));
@@ -18,16 +29,14 @@ export const initPocketBase = async () => {
             const authData = decodeURIComponent(cookie.split('=')[1]);
             pb.authStore.loadFromCookie(`pb_auth=${authData}`);
             
-            // Verify the token is still valid
-            if (pb.authStore.isValid) {
+            // Only refresh if token exists but is near expiry
+            if (pb.authStore.isValid && isTokenNearExpiry(pb.authStore.token)) {
                 try {
                     await pb.collection('users').authRefresh();
                 } catch (err) {
                     pb.authStore.clear();
                     throw err;
                 }
-            } else {
-                pb.authStore.clear();
             }
         }
     } catch (error) {

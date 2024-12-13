@@ -61,12 +61,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         }
       });
 
-      // Cleanup subscription on component destroy
-      onDestroy(() => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
-      });
+ 
 
       // Helper function to format message consistently
       function formatMessage(msg) {
