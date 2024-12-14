@@ -6,7 +6,16 @@ import { isTokenNearExpiry } from '$lib/pocketbase';
 const publicRoutes = [
   '/login',
   '/signup',
+  '/api',
+  '/embed',
+  '/embed/leadform/[id]'
 ];
+
+const rolePermissions = {
+  owner: ['manage_team', 'manage_settings', 'manage_billing', 'view_analytics'],
+  admin: ['manage_team', 'manage_settings', 'view_analytics'],
+  member: ['view_analytics']
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
   const isPublicRoute = publicRoutes.some(route => 
@@ -66,6 +75,12 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.cookies.delete('pb_auth', { path: '/' });
       throw redirect(303, '/login');
     }
+  }
+
+  // Add permission checking to the existing hook
+  if (event.locals.user) {
+    const userRole = event.locals.user.role || 'member';
+    event.locals.permissions = rolePermissions[userRole] || [];
   }
 
   const response = await resolve(event);

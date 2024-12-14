@@ -8,29 +8,40 @@ export async function GET({ params, request, locals }) {
     pb.authStore.clear();
 
     let form;
+    let company;
     if (params.id === 'default') {
       // Get the most recently created form
       const forms = await pb.collection('leadforms').getList(1, 1, {
         sort: '-created'
       });
+      console.log("forms", forms);
       form = forms.items[0];
+      company = await pb.collection('users').getOne(form.owner)
     } else {
       form = await pb.collection('leadforms').getOne(params.id);
+      console.log("form", form);
+      company = await pb.collection('users').getOne(form.owner)
+      console.log("company", company);
     }
 
     if (!form) {
       throw error(404, 'Form not found');
     }
 
+  
+
     const formData = typeof form.form_data === 'string' 
       ? JSON.parse(form.form_data)
       : form.form_data;
 
+    console.log("formData", formData);
+
     const jsCode = `
       (function() {
         const formData = ${JSON.stringify(formData)};
-        const formOwner = "${form.owner}";
-        const companyId = "${form.expand?.owner?.company_id}";
+        const formOwner = "${company.company_id}";
+
+        const companyId = "${company.company_id}";
         const baseUrl = "${PUBLIC_BASE_URL}";
         
         function addStyles() {
@@ -64,13 +75,13 @@ export async function GET({ params, request, locals }) {
               font-size: 0.875rem;
             }
             .clearsky-input:focus {
-              outline: 2px solid ${formData.settings.buttonColor};
+              outline: 2px solid \${formData.settings.buttonColor};
               outline-offset: 2px;
             }
             .clearsky-button {
               width: 100%;
               padding: 0.75rem;
-              background-color: ${formData.settings.buttonColor};
+              background-color: \${formData.settings.buttonColor};
               color: white;
               border: none;
               border-radius: 0.375rem;
@@ -179,9 +190,7 @@ export async function GET({ params, request, locals }) {
               ? data.name.split(' ').map(n => n[0]).join('').toUpperCase() 
               : '??';
 
-            const messageContent = Object.entries(data)
-              .map(([key, value]) => \`\${key}: \${value}\`)
-              .join('\\n');
+            const messageContent = data.message || '';
 
             const messageData = {
               customer_name: data.name || "Anonymous",
@@ -192,7 +201,7 @@ export async function GET({ params, request, locals }) {
               status: "new",
               thread_id: crypto.randomUUID(),
               source_url: window.location.href,
-              company_id: companyId || formOwner,
+              company_id: companyId,
               created: new Date().toISOString(),
               initials: initials,
               color: "bg-primary"

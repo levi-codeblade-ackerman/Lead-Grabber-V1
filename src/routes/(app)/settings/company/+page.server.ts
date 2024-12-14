@@ -12,7 +12,8 @@ export const load: PageServerLoad = async ({ locals }) => {
         // Get user's company
         const companies = await pb.collection('companies').getList(1, 1, {
             filter: `owner = "${user.id}"`,
-            sort: '-created'
+            sort: '-created',
+            expand: 'members'
         });
 
         const company = companies.items[0];
@@ -25,7 +26,8 @@ export const load: PageServerLoad = async ({ locals }) => {
                 ...company,
                 settings: typeof company.settings === 'string' 
                     ? JSON.parse(company.settings)
-                    : company.settings
+                    : company.settings,
+                members: company.expand?.members || []
             }
         };
     } catch (error) {

@@ -12,61 +12,86 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       let { data } = $props();
       
       // Add message data store
-      let messages = $state([]);
-      let selectedMessage = $state(null);
+      let messages = $state<{
+        initials: string;
+        name: string;
+        message: string;
+        time: string;
+        color: string;
+        id: string;
+        thread_id: string;
+        created: string;
+      }[]>([]);
+      let selectedMessage = $state<{
+        thread_id: string;
+        [key: string]: any;
+      } | null>(null);
       let showMessages = $state(true);
-      let chatMessages = $state([]);
+      let chatMessages = $state<{
+        sender: string;
+        message: string;
+        phone?: string;
+        email?: string;
+        time: string;
+        isYou: boolean;
+      }[]>([]);
 
-      // Add unsubscribe function to clean up subscription
-      let unsubscribe: () => void;
+      // Remove the unsubscribe variable declaration and replace with polling interval
+      let pollInterval: number;
 
       onMount(async () => {
         try {
-          // Initial load of messages with better error handling
+          // Initial load of messages
+          await loadMessages();
+          
+          // Set up polling every 5 seconds
+          pollInterval = setInterval(async () => {
+            await loadMessages();
+          }, 5000);
+
+        } catch (err) {
+          console.error('Error in onMount:', err);
+        }
+      });
+
+      // Add onDestroy cleanup
+      onDestroy(() => {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+      });
+
+      // Add loadMessages function
+      async function loadMessages() {
+        console.log('company_id', data.user?.company_id);
+        try {
           const records = await pb.collection('messages').getList(1, 50, {
             sort: '-created',
             filter: `company_id = "${data.user?.company_id}"`,
             expand: 'customer_id'
           });
 
-          console.log('Loaded messages:', records.items); // Debug log
-
           messages = records.items.map(formatMessage);
 
-          // Subscribe to realtime messages with proper error handling
-          unsubscribe = pb.collection('messages').subscribe('*', function(e) {
-            console.log('Realtime event:', e); // Debug log
-            
-            try {
-              if (e.action === 'create') {
-                // Check if message belongs to company
-                if (e.record.company_id === data.user?.company_id) {
-                  const newMessage = formatMessage(e.record);
-                  messages = [newMessage, ...messages];
+          // If there's a selected message, also update chat messages
+          if (selectedMessage) {
+            const chatRecords = await pb.collection('messages').getList(1, 50, {
+              sort: 'created',
+              filter: `thread_id = "${selectedMessage.thread_id}"`,
+              expand: 'customer_id'
+            });
 
-                  // If this message belongs to the current thread, add it to chat
-                  if (selectedMessage && e.record.thread_id === selectedMessage.thread_id) {
-                    const newChatMessage = formatChatMessage(e.record);
-                    chatMessages = [...chatMessages, newChatMessage];
-                  }
-                }
-              }
-            } catch (err) {
-              console.error('Error processing realtime message:', err);
-            }
-          });
-
+            chatMessages = chatRecords.items.map(formatChatMessage);
+          }
         } catch (err) {
           console.error('Error loading messages:', err);
         }
-      });
-
- 
+      }
 
       // Helper function to format message consistently
-      function formatMessage(msg) {
+      function formatMessage(msg: any) {
         return {
-          initials: msg.initials || (msg.customer_name?.split(' ').map(n => n[0]).join('') || '??'),
+          initials: msg.initials || (msg.customer_name?.split(' ').map((n: string) => n[0]).join('') || '??'),
           name: msg.customer_name || 'Unknown',
           message: msg.message,
           time: new Date(msg.created).toLocaleTimeString([], { 
@@ -76,15 +101,17 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           color: msg.color || 'bg-primary',
           id: msg.id,
           thread_id: msg.thread_id,
-          created: msg.created // Keep original date for sorting
+          created: msg.created
         };
       }
 
       // Helper function to format chat message
-      function formatChatMessage(chat) {
+      function formatChatMessage(chat: any) {
         return {
           sender: chat.customer_name || 'Unknown',
           message: chat.message,
+          phone: chat.customer_phone || '',
+          email: chat.customer_email || '',
           time: new Date(chat.created).toLocaleString([], { 
             hour: '2-digit', 
             minute: '2-digit',
@@ -96,7 +123,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       }
 
       // Function to select a message and load its chat history
-      async function selectMessage(msg) {
+      async function selectMessage(msg: { thread_id: string; [key: string]: any }) {
         selectedMessage = msg;
         showMessages = true;
         
@@ -108,17 +135,17 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           });
 
           chatMessages = records.items.map(formatChatMessage);
-
         } catch (err) {
           console.error('Error loading chat history:', err);
         }
       }
 
       // Function to send a new message
-      async function sendMessage(event) {
+      async function sendMessage(event: SubmitEvent) {
         if (!selectedMessage) return;
         
-        const input = event.target.querySelector('input');
+        const form = event.target as HTMLFormElement;
+        const input = form.querySelector('input') as HTMLInputElement;
         const message = input.value.trim();
         if (!message) return;
 
@@ -131,12 +158,15 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             status: 'replied',
             source: 'web',
             created: new Date().toISOString(),
-            initials: data.user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '??',
+            initials: data.user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
             color: 'bg-primary'
           };
 
           await pb.collection('messages').create(messageData);
           input.value = '';
+          
+          // Immediately load new messages after sending
+          await loadMessages();
 
         } catch (err) {
           console.error('Error sending message:', err);
@@ -188,7 +218,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                     <h4 class="text-lg font-medium">{msg.name}</h4>
                                     <span class="font-medium">{msg.time}</span>
                                 </div>
-                                <p class="font-light">{msg.message}</p>
+                                <p class="font-light line-clamp-2">{msg.message}</p>
                             </div>
                         </div>
                     {/each}
@@ -201,19 +231,33 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                 {#if showMessages}
                     <div class="flex flex-col gap-4 p-4">
                         {#each chatMessages as msg}
-                            <div class="flex flex-col {msg.isYou ? 'items-end' : 'items-start'}">
-                                <div class="max-w-[80%]">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <span class="font-medium">{msg.sender}</span>
-                                        <span class="text-sm text-gray-500">{msg.time}</span>
+                            <div class="border border-dashed border-gray-200 rounded-lg p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <svg class="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span class="font-medium">Leadform submission</span>
+                                </div>
+                                
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex">
+                                        <span class="font-medium w-24">Name:</span>
+                                        <span>{msg.sender}</span>
                                     </div>
-                                    <div class="flex items-start gap-2">
-                                        {#if !msg.isYou}
-                                            <div class="w-10 h-10 rounded-full bg-[#F3F3F3] flex-shrink-0"></div>
-                                        {/if}
-                                        <div class="rounded-b-xl p-3 text-[#101828] {msg.isYou ? 'bg-[#EAEDFB] rounded-tr-none rounded-tl-xl' : 'bg-[#F3F3F3] rounded-tr-xl rounded-tl-none'}">
-                                            {msg.message}
-                                        </div>
+                                    
+                                    <div class="flex">
+                                        <span class="font-medium w-24">Phone:</span>
+                                        <span>{msg.phone || 'N/A'}</span>
+                                    </div>
+                                    
+                                    <div class="flex">
+                                        <span class="font-medium w-24">Email:</span>
+                                        <span>{msg.email || 'N/A'}</span>
+                                    </div>
+                                    
+                                    <div class="flex">
+                                        <span class="font-medium w-24">Message:</span>
+                                        <span>{msg.message}</span>
                                     </div>
                                 </div>
                             </div>

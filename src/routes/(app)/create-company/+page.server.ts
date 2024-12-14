@@ -84,15 +84,50 @@ export const actions: Actions = {
                 name: "Default Form",
                 status: "active",
                 form_data: JSON.stringify({
-                    title: "Contact Us",
-                    description: "We'll get back to you as soon as possible.",
-                    fields: [
-                        { type: "text", label: "Full Name", required: true, placeholder: "Enter your full name" },
-                        { type: "email", label: "Email", required: true, placeholder: "Enter your email" },
-                        { type: "tel", label: "Phone", required: true, placeholder: "Enter your phone number" },
-                        { type: "textarea", label: "Message", required: false, placeholder: "How can we help you?" }
-                    ],
-                    submitButtonText: "Send Message"
+                    settings: {
+                        heading: "Contact Us",
+                        intro: "We'll get back to you as soon as possible.",
+                        buttonText: "Send Message",
+                        buttonColor: "#2E53D9",
+                        privacyPolicy: {
+                            type: "default",
+                            link: ""
+                        },
+                        customConfirmation: {
+                            type: "default",
+                            link: ""
+                        }
+                    },
+                    formElements: [
+                        {
+                            id: "name",
+                            type: "text",
+                            label: "Full Name",
+                            required: true,
+                            isDefault: true
+                        },
+                        {
+                            id: "email",
+                            type: "email",
+                            label: "Email",
+                            required: true,
+                            isDefault: true
+                        },
+                        {
+                            id: "phone",
+                            type: "phone",
+                            label: "Phone",
+                            required: true,
+                            isDefault: true
+                        },
+                        {
+                            id: "message",
+                            type: "message",
+                            label: "Message",
+                            required: true,
+                            isDefault: true
+                        }
+                    ]
                 })
             });
             
