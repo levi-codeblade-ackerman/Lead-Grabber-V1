@@ -8,6 +8,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       import { Bell, CheckCircle2, Images, MessageSquareText, Plus, Shuffle, Smile, Tag, UserPlus } from "lucide-svelte";
       import { onMount, onDestroy } from 'svelte';
       import { pb } from '$lib/pocketbase';
+	import { toast } from "svelte-sonner";
 
       let { data } = $props();
       
@@ -49,6 +50,19 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
       // Add a new state variable for initial load
       let initialLoad = $state(true);
+
+      let selectedTab = $state('all');
+
+      let filteredMessages = $derived(messages.filter(msg => {
+        switch (selectedTab) {
+          case 'unassigned':
+            return !msg.assigned_to;
+          case 'me':
+            return msg.assigned_to === data.user?.id;
+          default: // 'all'
+            return true;
+        }
+      }));
 
       onMount(async () => {
         try {
@@ -250,15 +264,24 @@ import HeaderTag from "$lib/components/header-tag.svelte";
     
     <div class="w-full h-[61px] bg-white rounded-lg px-8 flex items-center justify-between">
         <div class="flex items-center gap-14">
-            <h3 class="text-xl font-normal leading-8">
+            <button 
+                class="text-xl font-normal leading-8 {selectedTab === 'all' ? 'text-primary font-medium' : 'text-gray-600 hover:text-gray-900'}"
+                onclick={() => selectedTab = 'all'}
+            >
                 All
-            </h3>
-            <h3 class="text-xl font-normal leading-8">
+            </button>
+            <button 
+                class="text-xl font-normal leading-8 {selectedTab === 'unassigned' ? 'text-primary font-medium' : 'text-gray-600 hover:text-gray-900'}"
+                onclick={() => selectedTab = 'unassigned'}
+            >
                 Unassigned
-            </h3>
-            <h3 class="text-xl font-normal leading-8">
+            </button>
+            <button 
+                class="text-xl font-normal leading-8 {selectedTab === 'me' ? 'text-primary font-medium' : 'text-gray-600 hover:text-gray-900'}"
+                onclick={() => selectedTab = 'me'}
+            >
                 Me
-            </h3>
+            </button>
         </div>
     
         <div class="actions flex items-center gap-2">
@@ -290,7 +313,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                             </div>
                         {/each}
                     {:else}
-                        {#each messages as msg}
+                        {#each filteredMessages as msg}
                             <div 
                               class="flex items-center gap-4 py-4 cursor-pointer hover:bg-gray-50"
                               onclick={() => selectMessage(msg)}
@@ -314,6 +337,18 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                 </div>
                             </div>
                         {/each}
+                        
+                        {#if filteredMessages.length === 0}
+                            <div class="py-8 text-center text-gray-500">
+                                {#if selectedTab === 'unassigned'}
+                                    No unassigned messages
+                                {:else if selectedTab === 'me'}
+                                    No messages assigned to you
+                                {:else}
+                                    No messages found
+                                {/if}
+                            </div>
+                        {/if}
                     {/if}
                         
                 </div>
@@ -372,7 +407,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                             {/each}
                             <div class="w-full">
                               <DropdownMenu.Root>
-                                <DropdownMenu.Trigger asChild>
+                                <DropdownMenu.Trigger>
                                   <Button class="bg-primary text-white w-full">
                                     <UserPlus class="w-5 h-5 mr-2" />
                                     {selectedMessage?.assigned_to ? 'Reassign' : 'Assign'}

@@ -9,16 +9,51 @@
     import { toast } from 'svelte-sonner';
     import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
     import { Loader2, Users } from 'lucide-svelte';
-    import { onDestroy } from 'svelte';
+    import { onDestroy, onMount } from 'svelte';
     import * as Dialog from "$lib/components/ui/dialog/index";
     import * as Select from "$lib/components/ui/select/index.js";
+    import { pb } from '$lib/pocketbase';
 
-    let { data } = $props();
+    interface CompanyMember {
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+    }
+
+    interface Company {
+        id: string;
+        collectionId: string;
+        name: string;
+        website?: string;
+        logo?: string;
+        owner: string;
+        members: CompanyMember[];
+        settings: {
+            branding: {
+                primary_color: string;
+            };
+            notifications: {
+                email: boolean;
+                web: boolean;
+            };
+        };
+    }
+
+    let { data } = $props<{ data: { company: Company } }>();
     let company = data.company;
     let form: any;
     let loading = $state(false);
     let previewUrl: string | null = $state(null);
     let showInviteDialog = $state(false);
+    let pendingInvites = $state<{
+        id: string;
+        email: string;
+        role: string;
+        status: string;
+        created: string;
+        resent?: string;
+    }[]>([]);
 
     $effect(() => {
         if (form?.success) {
@@ -67,6 +102,68 @@
             console.error('Error updating role:', error);
         }
     }
+
+    async function loadPendingInvites() {
+        try {
+            const records = await pb.collection('invites').getList(1, 50, {
+                filter: `company_id = "${company.id}"`,
+                sort: '-created'
+            });
+            pendingInvites = records.items;
+        } catch (err) {
+            console.error('Error loading invites:', err);
+            toast.error('Failed to load invites');
+        }
+    }
+
+    onMount(() => {
+        loadPendingInvites();
+    });
+
+    async function cancelInvite(inviteId: string) {
+        try {
+            await pb.collection('invites').delete(inviteId);
+            toast.success('Invite cancelled');
+            await loadPendingInvites();
+        } catch (err) {
+            console.error('Error cancelling invite:', err);
+            toast.error('Failed to cancel invite');
+        }
+    }
+
+    async function removeMember(memberId: string) {
+        try {
+            await pb.collection('users').update(memberId, {
+                company_id: null,
+                role: null
+            });
+            toast.success('Member removed successfully');
+        } catch (error) {
+            console.error('Error removing member:', error);
+            toast.error('Failed to remove member');
+        }
+    }
+
+    async function resendInvite(inviteId: string) {
+        try {
+            await pb.collection('invites').update(inviteId, {
+                resent: new Date().toISOString()
+            });
+            toast.success('Invitation resent successfully');
+        } catch (error) {
+            console.error('Error resending invite:', error);
+            toast.error('Failed to resend invitation');
+        }
+    }
+
+    async function checkUserExists(email: string) {
+        try {
+            await pb.collection('users').getFirstListItem(`email="${email}"`);
+            return true;
+        } catch {
+            return false;
+        }
+    }
 </script>
 
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
@@ -99,11 +196,14 @@
                     use:enhance={() => {
                         loading = true;
                         return async ({ result }) => {
-                            form = result;
-                            if (result.type === 'failure') {
+                            if (result.type === 'success') {
+                                toast.success('Company settings updated successfully');
+                            } else if (result.type === 'failure') {
                                 toast.error(result.data?.error || 'Failed to update company');
-                                loading = false;
+                            } else if (result.type === 'error') {
+                                toast.error(result.error || 'An error occurred');
                             }
+                            loading = false;
                         };
                     }}
                     class="space-y-6"
@@ -235,48 +335,94 @@
                         </Button>
                     </div>
 
-                    <div class="divide-y">
-                        {#each company.members || [] as member}
-                            <div class="flex items-center justify-between py-4">
-                                <div class="flex items-center gap-4">
-                                    <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                        {member.name?.[0]?.toUpperCase() || '??'}
+                    <div class="space-y-4">
+                        <h3 class="text-lg font-medium">Active Members</h3>
+                        <div class="divide-y">
+                            {#each company.members || [] as member}
+                                <div class="flex items-center justify-between py-4">
+                                    <div class="flex items-center gap-4">
+                                        <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                            {member.name?.[0]?.toUpperCase() || '??'}
+                                        </div>
+                                        <div>
+                                            <div class="font-medium">{member.name}</div>
+                                            <div class="text-sm text-muted-foreground">{member.email}</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div class="font-medium">{member.name}</div>
-                                        <div class="text-sm text-muted-foreground">{member.email}</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <Select.Root 
-                                        type="single" 
-                                        value={member.role}
-                                        onValueChange={(value) => updateMemberRole(member.id, value)}
-                                        disabled={member.id === company.owner}
-                                    >
-                                        <Select.Trigger class="w-32">
-                                            <Select.Value />
-                                        </Select.Trigger>
-                                        <Select.Content>
-                                            <Select.Item value="owner">Owner</Select.Item>
-                                            <Select.Item value="admin">Admin</Select.Item>
-                                            <Select.Item value="member">Member</Select.Item>
-                                        </Select.Content>
-                                    </Select.Root>
-                                    
-                                    {#if member.id !== company.owner}
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm"
-                                            onclick={() => removeMember(member.id)}
+                                    <div class="flex items-center gap-4">
+                                        <Select.Root 
+                                            type="single" 
+                                            value={member.role}
+                                            onValueChange={(value) => updateMemberRole(member.id, value)}
+                                            disabled={member.id === company.owner}
                                         >
-                                            Remove
-                                        </Button>
-                                    {/if}
+                                            <Select.Trigger class="w-32">
+                                                <Select.Text>{member.role}</Select.Text>
+                                            </Select.Trigger>
+                                            <Select.Content>
+                                                <Select.Item value="owner">Owner</Select.Item>
+                                                <Select.Item value="admin">Admin</Select.Item>
+                                                <Select.Item value="member">Member</Select.Item>
+                                            </Select.Content>
+                                        </Select.Root>
+                                        
+                                        {#if member.id !== company.owner}
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm"
+                                                onclick={() => removeMember(member.id)}
+                                            >
+                                                Remove
+                                            </Button>
+                                        {/if}
+                                    </div>
                                 </div>
-                            </div>
-                        {/each}
+                            {/each}
+                        </div>
                     </div>
+
+                    {#if pendingInvites.length > 0}
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-medium">Invitations</h3>
+                            <div class="space-y-2">
+                                {#each pendingInvites as invite}
+                                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                        <div>
+                                            <p class="font-medium">{invite.email}</p>
+                                            <div class="flex gap-2 items-center">
+                                                <p class="text-sm text-gray-500">Role: {invite.role}</p>
+                                                <span class="text-sm px-2 py-0.5 rounded-full {
+                                                    invite.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                    invite.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                                                    'bg-red-100 text-red-800'
+                                                }">
+                                                    {invite.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {#if invite.status === 'pending'}
+                                            <div class="flex items-center gap-2">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    onclick={() => cancelInvite(invite.id)}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    onclick={() => resendInvite(invite.id)}
+                                                >
+                                                    Resend
+                                                </Button>
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
                 </div>
             </Tabs.Content>
         </Tabs.Root>
@@ -295,13 +441,29 @@
         <form 
             method="POST" 
             action="?/inviteMember"
-            use:enhance={() => {
+            use:enhance={({ formData }) => {
+                const email = formData.get('email')?.toString();
+                
                 return async ({ result }) => {
+                    if (!email) {
+                        toast.error('Email is required');
+                        return;
+                    }
+
+                    const userExists = await checkUserExists(email);
+                    if (!userExists) {
+                        toast.error('This email is not registered. Please ask them to create an account first.');
+                        return;
+                    }
+
                     if (result.type === 'success') {
                         toast.success('Invitation sent successfully');
                         showInviteDialog = false;
-                    } else {
+                        await loadPendingInvites();
+                    } else if (result.type === 'failure') {
                         toast.error(result.data?.error || 'Failed to send invitation');
+                    } else if (result.type === 'error') {
+                        toast.error(result.error || 'An error occurred');
                     }
                 };
             }}

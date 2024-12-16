@@ -3,7 +3,7 @@ import { pb } from '$lib/pocketbase';
 import { NODE_ENV } from '$env/static/private';
 
 export const actions = {
-    default: async ({ request, cookies }) => {
+    default: async ({ request, cookies, url }) => {
         const data = await request.formData();
         const email = data.get('email') as string;
         const password = data.get('password') as string;
@@ -12,7 +12,10 @@ export const actions = {
             const authData = await pb.collection('users').authWithPassword(email, password);
             
             if (!authData?.token) {
-                throw new Error('No auth token received');
+                return fail(400, {
+                    success: false,
+                    message: 'Authentication failed'
+                });
             }
 
             // Set cookie with proper encoding
@@ -29,11 +32,16 @@ export const actions = {
                 maxAge: 60 * 60 * 24 * 30 // 30 days
             });
 
+            // Get redirect URL from query params or default to '/'
+            const redirectTo = url.searchParams.get('redirect') || '/';
+            
             return {
                 success: true,
                 message: 'Login successful',
-                user: authData.record
+                user: authData.record,
+                redirectTo
             };
+
         } catch (err: any) {
             console.error('Login error:', err);
             return fail(400, {
