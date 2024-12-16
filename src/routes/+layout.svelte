@@ -52,5 +52,5 @@
 </svelte:head>
 <Toaster richColors/>
 <div class="root-layout overflow-hidden">
-	<main>{@render children()}</main>
+	{@render children()}
 </div>

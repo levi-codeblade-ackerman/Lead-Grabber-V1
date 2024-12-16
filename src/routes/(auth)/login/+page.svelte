@@ -24,7 +24,12 @@
 <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-[1000px] w-full flex gap-6 bg-dialog">
         <div class="flex-1 hidden lg:block">
-            <img src="/img/login.png" alt="Person working on laptop" class="w-full h-full object-cover rounded-lg"/>
+            <img 
+                src="/img/login.png" 
+                alt="Person working on laptop" 
+                class="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+            />
         </div>
 
         <div class="w-full lg:w-[460px] flex flex-col justify-center">

@@ -7,6 +7,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index";
       import { Bell, CheckCircle2, Images, MessageSquareText, Plus, Shuffle, Smile, Tag, UserPlus } from "lucide-svelte";
       import { onMount, onDestroy } from 'svelte';
+      
       import { pb } from '$lib/pocketbase';
 	import { toast } from "svelte-sonner";
 
@@ -52,17 +53,27 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       let initialLoad = $state(true);
 
       let selectedTab = $state('all');
+      let filteredMessages = $state<typeof messages>([]);
 
-      let filteredMessages = $derived(messages.filter(msg => {
-        switch (selectedTab) {
-          case 'unassigned':
-            return !msg.assigned_to;
-          case 'me':
-            return msg.assigned_to === data.user?.id;
-          default: // 'all'
-            return true;
-        }
-      }));
+      // Replace the existing filteredMessages with memoized version
+      $effect(() => {
+        const filterFn = (msg: any) => {
+          switch (selectedTab) {
+            case 'unassigned':
+              return !msg.assigned_to;
+            case 'me':
+              return msg.assigned_to === data.user?.id;
+            default:
+              return true;
+          }
+        };
+        
+        filteredMessages = messages.filter(filterFn);
+      });
+
+      // Add pagination state
+      let page = $state(1);
+      const PER_PAGE = 20;
 
       onMount(async () => {
         try {
@@ -70,10 +81,22 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           await loadMessages();
           await loadCompanyMembers();
           
-          // Set up polling every 5 seconds
+          // Increase polling interval to 15 seconds
           pollInterval = setInterval(async () => {
-            await loadMessages();
-          }, 5000);
+            const latestMessage = messages[0];
+            if (latestMessage) {
+              // Only fetch messages newer than the latest one
+              const newRecords = await pb.collection('messages').getList(1, 5, {
+                sort: '-created',
+                filter: `company_id = "${data.user?.company_id}" && created > "${latestMessage.created}"`,
+                expand: 'customer_id'
+              });
+              
+              if (newRecords.items.length > 0) {
+                messages = [...newRecords.items.map(formatMessage), ...messages];
+              }
+            }
+          }, 15000);
 
         } catch (err) {
           console.error('Error in onMount:', err);
@@ -89,43 +112,47 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
       // Add loadMessages function
       async function loadMessages() {
-        // Only show loading state on initial load
         if (initialLoad) {
           isLoadingMessages = true;
         }
         
         try {
-          const records = await pb.collection('messages').getList(1, 50, {
+          const records = await pb.collection('messages').getList(page, PER_PAGE, {
             sort: '-created',
             filter: `company_id = "${data.user?.company_id}"`,
             expand: 'customer_id'
           });
 
-          const formattedMessages = records.items.map(formatMessage);
-          messages = formattedMessages;
+          // Append messages instead of replacing if not initial load
+          messages = initialLoad ? 
+            records.items.map(formatMessage) : 
+            [...messages, ...records.items.map(formatMessage)];
 
-          if (selectedMessage) {
-            if (initialLoad) {
-              isLoadingChat = true;
-            }
-            try {
-              const chatRecords = await pb.collection('messages').getList(1, 50, {
-                sort: 'created',
-                filter: `thread_id = "${selectedMessage.thread_id}"`,
-                expand: 'customer_id'
-              });
-
-              chatMessages = chatRecords.items.map(formatChatMessage);
-            } finally {
-              isLoadingChat = false;
-            }
+          // Update chat messages only if needed
+          if (selectedMessage && initialLoad) {
+            isLoadingChat = true;
+            await loadChatMessages(selectedMessage.thread_id);
           }
 
         } catch (err) {
           console.error('Error loading messages:', err);
         } finally {
           isLoadingMessages = false;
-          initialLoad = false; // Set initial load to false after first load
+          initialLoad = false;
+        }
+      }
+
+      // Separate chat messages loading
+      async function loadChatMessages(threadId: string) {
+        try {
+          const records = await pb.collection('messages').getList(1, 20, {
+            sort: 'created',
+            filter: `thread_id = "${threadId}"`,
+            expand: 'customer_id'
+          });
+          chatMessages = records.items.map(formatChatMessage);
+        } finally {
+          isLoadingChat = false;
         }
       }
 
@@ -255,7 +282,61 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
       // Add function for quick self-assignment
       async function assignToMe(messageId: string) {
-        await assignMessage(messageId, data.user.id);
+        if (!messageId) return;
+        
+        try {
+            await pb.collection('messages').update(messageId, {
+                assigned_to: data.user.id
+            });
+
+            // Update the local messages array by modifying the specific message
+            messages = messages.map(msg => 
+                msg.id === messageId 
+                    ? { ...msg, assigned_to: data.user.id }
+                    : msg
+            );
+
+            toast.success('Message assigned to you');
+        } catch (err) {
+            console.error('Error assigning message:', err);
+            toast.error('Failed to assign message');
+        }
+      }
+
+      // Add function for assigning message to a member
+      async function assignToMember(messageId: string, memberId: string) {
+        if (!messageId || !memberId) return;
+        
+        try {
+            await pb.collection('messages').update(messageId, {
+                assigned_to: memberId
+            });
+
+            // Update the local messages array by modifying the specific message
+            messages = messages.map(msg => 
+                msg.id === messageId 
+                    ? { ...msg, assigned_to: memberId }
+                    : msg
+            );
+
+            toast.success('Message assigned successfully');
+        } catch (err) {
+            console.error('Error assigning message:', err);
+            toast.error('Failed to assign message');
+        }
+      }
+
+      // Add infinite scroll
+      let messagesContainer: HTMLElement;
+      function handleScroll(e: Event) {
+        const target = e.target as HTMLElement;
+        if (
+          target.scrollHeight - target.scrollTop === target.clientHeight && 
+          !isLoadingMessages
+        ) {
+          page++;
+          loadMessages();
+        }
       }
 </script>
 
@@ -356,7 +437,11 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         </div>
 
         <div class="w-1/2 bg-white rounded-xl flex flex-col">
-            <div class="flex-1 overflow-y-auto">
+            <div 
+              class="flex-1 overflow-y-auto" 
+              bind:this={messagesContainer}
+              onscroll={handleScroll}
+            >
                 {#if selectedMessage && showMessages}
                     {#if isLoadingChat}
                         <div class="flex flex-col gap-4 p-4">
@@ -425,7 +510,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                     {#each companyMembers as member}
                                       {#if member.id !== data.user.id}
                                         <DropdownMenu.Item 
-                                          onclick={() => assignMessage(selectedMessage?.id, member.id)}
+                                          onclick={() => assignToMember(selectedMessage?.id, member.id)}
                                         >
                                           {member.name}
                                         </DropdownMenu.Item>
