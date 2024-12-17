@@ -106,8 +106,9 @@
 
 {#if user.company_id && user.company_id !== ''}
 <div class="h-[90vh] flex flex-col gap-3 p-4 bg-gray-100">
-    <div class="flex items-center justify-between w-full">
+    <div class="flex items-center justify-between w-full py-2">
         <div class="h1 font-semibold text-2xl">Leadbox</div>
+        <div class="flex gap-2 items-center">
         <Button 
   variant="outline" 
   class="gap-2 bg-transparent border border-primary text-primary rounded-lg hover:text-white"
@@ -116,8 +117,46 @@
   <CodeXml class="h-4 w-4" />
   Get Embed Code
 </Button>
-    </div>
+<form
+method="POST"
+action="?/saveLeadbox" 
+use:enhance={() => {
+    return async ({ result }) => {
+        if (result.type === 'success') {
+            toast.success( 'Leadbox saved successfully!');
+        } else {
+            toast.error( 'Error saving leadbox');
+        }
+    };
+}}
+>
+<input 
+    type="hidden" 
+    name="leadboxData" 
+    value={JSON.stringify({
+        textOnly,
+        iconOnly,
+        leadBoxOpen,
+        primaryIconOnly,
+        channels,
+        secondaryButton,
+        logoImage
+    })} 
+/>
 
+<!-- Move the save button inside the form -->
+<div class="flex justify-start">
+    <Button 
+        type="submit"
+        class="bg-primary text-white px-8"
+    >
+        Save Changes
+    </Button>
+</div>
+</form>
+
+    </div>
+</div>
     <div class="flex gap-5">
         <!-- Left Section -->
         <div class="w-1/2  rounded-xl p-6 bg-white h-fit">
@@ -232,7 +271,7 @@
         </div>
 
         <!-- Right Section - Preview -->
-        <div class="w-1/2 bg-white rounded-xl p-6 relative h-[80vh]">
+        <div class="w-1/2 bg-white rounded-xl p-6 relative min-h-[90vh]">
             <h2 class="text-xl font-semibold mb-6">Leadbox Preview</h2>
             
             <div class="absolute  bottom-4 right-4">
@@ -330,43 +369,7 @@
             </div>
             </div>
         </div>
-        <form
-            method="POST"
-            action="?/saveLeadbox"
-            use:enhance={() => {
-                return async ({ result }) => {
-                    if (result.type === 'success') {
-                        toast.success( 'Leadbox saved successfully!');
-                    } else {
-                        toast.error( 'Error saving leadbox');
-                    }
-                };
-            }}
-        >
-            <input 
-                type="hidden" 
-                name="leadboxData" 
-                value={JSON.stringify({
-                    textOnly,
-                    iconOnly,
-                    leadBoxOpen,
-                    primaryIconOnly,
-                    channels,
-                    secondaryButton,
-                    logoImage
-                })} 
-            />
-            
-            <!-- Move the save button inside the form -->
-            <div class="flex justify-start mt-4">
-                <Button 
-                    type="submit"
-                    class="bg-primary text-white px-8"
-                >
-                    Save Changes
-                </Button>
-            </div>
-        </form>
+     
     </div>
 </div>
 {:else}
