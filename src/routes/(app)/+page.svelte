@@ -10,8 +10,12 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       
       import { pb } from '$lib/pocketbase';
 	import { toast } from "svelte-sonner";
+	import { goto } from "$app/navigation";
 
       let { data: pageData } = $props<{ user: any }>();
+      if(pageData.user.company_id === null || pageData.user.company_id === ""){
+        goto('/create-company');
+      }
       
       // Add message data store
       let messages = $state<{
