@@ -13,6 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     try {
         // First check if user has a company_id
         if (!user.company_id) {
+            console.error('User has no company_id:', user);
             throw redirect(303, '/create-company');
         }
 
@@ -20,6 +21,19 @@ export const load: PageServerLoad = async ({ locals }) => {
         const company = await pb.collection('companies').getOne(user.company_id, {
             expand: 'team_members'
         });
+
+        // Get company members with expanded user data
+        const members = await pb.collection('company_members').getList(1, 50, {
+            filter: `company_id = "${user.company_id}" && status = "active"`,
+            expand: 'user_id',
+            sort: '-created'
+        });
+
+        console.log('members', members);
+
+        if (!members.items.length) {
+            console.warn('No members found for company:', user.company_id);
+        }
 
         return {
             company: {
@@ -29,15 +43,19 @@ export const load: PageServerLoad = async ({ locals }) => {
                     : company.settings || {
                         branding: { primary_color: '#000000' },
                         notifications: { email: true, web: true }
-                    },
-                members: company.expand?.team_members || []
-            }
+                    }
+            },
+            members: members.items.map(member => ({
+                id: member.id,
+                user: member.expand?.user_id,
+                role: member.role,
+                joined_at: member.joined_at
+            }))
         };
     } catch (error) {
         console.error('Error loading company:', error);
-        // If company not found, redirect to create company
-        if (error.status === 404) {
-            // Clear the company_id from user if it's invalid
+        // If company not found or other error, clear the company_id and redirect
+        if (error.status === 404 || !user.company_id) {
             await pb.collection('users').update(user.id, {
                 company_id: null
             });
@@ -45,6 +63,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         }
         return {
             company: null,
+            members: [],
             error: 'Failed to load company'
         };
     }
@@ -108,6 +127,11 @@ export const actions: Actions = {
             const data = await request.formData();
             const email = data.get('email')?.toString();
             const role = data.get('role')?.toString() || 'member';
+
+            // Validate role
+            if (!['admin', 'member'].includes(role)) {
+                return fail(400, { error: 'Invalid role. Only admin and member roles are allowed.' });
+            }
 
             if (!email) {
                 return fail(400, { error: 'Email is required' });

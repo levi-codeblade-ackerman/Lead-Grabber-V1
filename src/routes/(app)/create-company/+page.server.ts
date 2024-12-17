@@ -1,6 +1,7 @@
 import { pb } from '$lib/pocketbase';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { DEFAULT_PERMISSIONS } from '$lib/types/company_member';
 
 export const load: PageServerLoad = async ({ locals }) => {
     const user = locals.user;
@@ -134,6 +135,14 @@ export const actions: Actions = {
             // Update the user's record with the company ID
             await pb.collection('users').update(user.id, {
                 company_id: company.id
+            });
+            
+            // Create company member record for owner
+            await pb.collection('company_members').create({
+                user: user.id,
+                company: company.id,
+                role: 'owner',
+                permissions: DEFAULT_PERMISSIONS.owner
             });
             
             return { success: true };

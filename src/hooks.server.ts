@@ -8,7 +8,9 @@ const publicRoutes = [
   '/signup',
   '/api',
   '/embed',
-  '/embed/leadform/[id]'
+  '/embed/leadform/[id]',
+  '/invite/accept/[id]',
+  '/embed/leadbox/[id]'
 ];
 
 const rolePermissions = {

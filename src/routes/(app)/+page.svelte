@@ -248,16 +248,19 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       // Add this function to load company members
       async function loadCompanyMembers() {
         try {
-          const company = await pb.collection('companies').getOne(data.user?.company_id, {
-            expand: 'team_members'
+          console.log('user', data.user);
+          // Use company_members collection instead of expanding company
+          const members = await pb.collection('company_members').getList(1, 50, {
+            filter: `company_id = "${data.user?.company_id}" && status = "active"`,
+            expand: 'user_id', // Expand the user relation to get user details
+            sort: '-created'
           });
           
-          if (company.expand?.team_members) {
-            companyMembers = company.expand.team_members.map((member: any) => ({
-              id: member.id,
-              name: member.name
-            }));
-          }
+          companyMembers = members.items.map((member: any) => ({
+            id: member.id,
+            name: member.expand?.user_id?.name || 'Unknown',
+            role: member.role
+          }));
         } catch (err) {
           console.error('Error loading company members:', err);
         }

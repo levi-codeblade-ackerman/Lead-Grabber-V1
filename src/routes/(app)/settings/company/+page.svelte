@@ -13,6 +13,8 @@
     import * as Dialog from "$lib/components/ui/dialog/index";
     import * as Select from "$lib/components/ui/select/index.js";
     import { pb } from '$lib/pocketbase';
+    import RoleBadge from '$lib/components/RoleBadge.svelte';
+    import { formatDate } from '$lib/utils/date';
 
     interface CompanyMember {
         id: string;
@@ -40,7 +42,24 @@
         };
     }
 
-    let { data } = $props<{ data: { company: Company } }>();
+    interface Member {
+        id: string;
+        user: {
+            id: string;
+            name: string;
+            email: string;
+            avatar?: string;
+        };
+        role: 'owner' | 'admin' | 'member';
+        joined_at: string;
+    }
+
+    let { data } = $props<{ 
+        data: { 
+            company: Company;
+            members: Member[];
+        }
+    }>();
     let company = data.company;
     let form: any;
     let loading = $state(false);
@@ -54,6 +73,9 @@
         created: string;
         resent?: string;
     }[]>([]);
+    let editMemberDialog = $state(false);
+    let selectedMember = $state<Member | null>(null);
+    let selectedRole = $state<string>('');
 
     $effect(() => {
         if (form?.success) {
@@ -162,6 +184,30 @@
             return true;
         } catch {
             return false;
+        }
+    }
+
+    async function handleEditMember(member: Member) {
+        selectedMember = member;
+        selectedRole = member.role;
+        editMemberDialog = true;
+    }
+
+    async function handleRoleUpdate() {
+        if (!selectedMember || !selectedRole) return;
+
+        try {
+            await pb.collection('company_members').update(selectedMember.id, {
+                role: selectedRole
+            });
+            toast.success('Member role updated');
+            // Refresh the page to show updated data
+            window.location.reload();
+        } catch (error) {
+            console.error('Error updating member:', error);
+            toast.error('Failed to update member');
+        } finally {
+            editMemberDialog = false;
         }
     }
 </script>
@@ -337,47 +383,78 @@
 
                     <div class="space-y-4">
                         <h3 class="text-lg font-medium">Active Members</h3>
-                        <div class="divide-y">
-                            {#each company.members || [] as member}
-                                <div class="flex items-center justify-between py-4">
-                                    <div class="flex items-center gap-4">
-                                        <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                            {member.name?.[0]?.toUpperCase() || '??'}
-                                        </div>
-                                        <div>
-                                            <div class="font-medium">{member.name}</div>
-                                            <div class="text-sm text-muted-foreground">{member.email}</div>
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center gap-4">
-                                        <Select.Root 
-                                            type="single" 
-                                            value={member.role}
-                                            onValueChange={(value) => updateMemberRole(member.id, value)}
-                                            disabled={member.id === company.owner}
-                                        >
-                                            <Select.Trigger class="w-32">
-                                                <Select.Text>{member.role}</Select.Text>
-                                            </Select.Trigger>
-                                            <Select.Content>
-                                                <Select.Item value="owner">Owner</Select.Item>
-                                                <Select.Item value="admin">Admin</Select.Item>
-                                                <Select.Item value="member">Member</Select.Item>
-                                            </Select.Content>
-                                        </Select.Root>
-                                        
-                                        {#if member.id !== company.owner}
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm"
-                                                onclick={() => removeMember(member.id)}
-                                            >
-                                                Remove
-                                            </Button>
-                                        {/if}
-                                    </div>
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-6">
+                                <h2 class="text-lg font-semibold mb-4">Active Members</h2>
+                                
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead>
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Member
+                                                </th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Role
+                                                </th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Joined
+                                                </th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            {#each data.members as member}
+                                                <tr>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <div class="flex items-center">
+                                                            <div class="h-10 w-10 flex-shrink-0">
+                                                                {#if member.user?.avatar}
+                                                                    <img 
+                                                                        class="h-10 w-10 rounded-full" 
+                                                                        src={member.user.avatar} 
+                                                                        alt="" 
+                                                                    />
+                                                                {:else}
+                                                                    <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                                                        <span class="text-gray-500 font-medium">
+                                                                            {member.user?.name?.charAt(0).toUpperCase() ?? '?'}
+                                                                        </span>
+                                                                    </div>
+                                                                {/if}
+                                                            </div>
+                                                            <div class="ml-4">
+                                                                <div class="text-sm font-medium text-gray-900">
+                                                                    {member.user?.name ?? 'Unknown'}
+                                                                </div>
+                                                                <div class="text-sm text-gray-500">
+                                                                    {member.user?.email ?? 'No email'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <RoleBadge role={member.role} />
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {formatDate(member.joined_at)}
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                        <button 
+                                                            class="text-indigo-600 hover:text-indigo-900"
+                                                            onclick={() => handleEditMember(member)}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            {/each}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            {/each}
+                            </div>
                         </div>
                     </div>
 
@@ -482,11 +559,17 @@
 
             <div class="space-y-2">
                 <Label for="role">Role</Label>
-                <Select.Root type="single" >
-                    <Select.Trigger class="w-full"> </Select.Trigger>
+                <Select.Root type="single" name="role" defaultValue="member">
+                    <Select.Trigger class="w-full">
+                        <Select.Value placeholder="Select a role" />
+                    </Select.Trigger>
                     <Select.Content>
-                        <Select.Item value="admin">Admin</Select.Item>
-                        <Select.Item value="member">Member</Select.Item>
+                        <Select.Group>
+                            <Select.Label>Available Roles</Select.Label>
+                            <Select.Item value="owner">Owner</Select.Item>
+                            <Select.Item value="admin">Admin</Select.Item>
+                            <Select.Item value="member">Member</Select.Item>
+                        </Select.Group>
                     </Select.Content>
                 </Select.Root>
             </div>
@@ -500,5 +583,55 @@
                 </Button>
             </div>
         </form>
+    </Dialog.Content>
+</Dialog.Root> 
+
+<Dialog.Root bind:open={editMemberDialog}>
+    <Dialog.Content class="sm:max-w-[425px]">
+        <Dialog.Header>
+            <Dialog.Title>Edit Member Role</Dialog.Title>
+            <Dialog.Description>
+                Change the role for {selectedMember?.user?.name}
+            </Dialog.Description>
+        </Dialog.Header>
+
+        <div class="grid gap-4 py-4">
+            <div class="space-y-2">
+                <Label>Role</Label>
+                <Select.Root 
+                    bind:value={selectedRole}
+                    defaultValue={selectedMember?.role}
+                >
+                    <Select.Trigger class="w-full">
+                        <Select.Value placeholder="Select a role" />
+                    </Select.Trigger>
+                    <Select.Content>
+                        <Select.Group>
+                            <Select.Label>Available Roles</Select.Label>
+                            {#if selectedMember?.role === 'owner'}
+                                <Select.Item value="owner">Owner</Select.Item>
+                            {/if}
+                            <Select.Item value="admin">Admin</Select.Item>
+                            <Select.Item value="member">Member</Select.Item>
+                        </Select.Group>
+                    </Select.Content>
+                </Select.Root>
+            </div>
+        </div>
+
+        <Dialog.Footer>
+            <Button 
+                variant="outline" 
+                onclick={() => editMemberDialog = false}
+            >
+                Cancel
+            </Button>
+            <Button 
+                onclick={handleRoleUpdate}
+                disabled={!selectedRole || selectedRole === selectedMember?.role}
+            >
+                Save Changes
+            </Button>
+        </Dialog.Footer>
     </Dialog.Content>
 </Dialog.Root> 
