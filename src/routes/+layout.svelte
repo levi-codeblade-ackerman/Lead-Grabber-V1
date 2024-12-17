@@ -32,14 +32,20 @@
 		
 		const isAuthenticated = pb.authStore.isValid && pb.authStore.token;
 		
-		// Redirect to login if accessing protected route while not authenticated
-		if (!isPublicRoute && !isAuthenticated) {
-			goto('/login', { replaceState: true });
-		}
-		// Redirect to home if accessing login while authenticated
-		else if (isAuthenticated && $page.url.pathname.startsWith('/login')) {
-			goto('/', { replaceState: true });
-		}
+		// Use setTimeout to debounce navigation
+		const timeoutId = setTimeout(() => {
+			// Redirect to login if accessing protected route while not authenticated
+			if (!isPublicRoute && !isAuthenticated) {
+				goto('/login', { replaceState: true });
+			}
+			// Redirect to home if accessing login while authenticated
+			else if (isAuthenticated && $page.url.pathname.startsWith('/login')) {
+				goto('/', { replaceState: true });
+			}
+		}, 100); // 100ms debounce
+
+		// Cleanup timeout on effect cleanup
+		return () => clearTimeout(timeoutId);
 	});
 </script>
 

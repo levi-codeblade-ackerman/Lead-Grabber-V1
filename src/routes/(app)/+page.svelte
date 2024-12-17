@@ -11,7 +11,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       import { pb } from '$lib/pocketbase';
 	import { toast } from "svelte-sonner";
 
-      let { data } = $props();
+      let { data: pageData } = $props<{ user: any }>();
       
       // Add message data store
       let messages = $state<{
@@ -62,7 +62,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             case 'unassigned':
               return !msg.assigned_to;
             case 'me':
-              return msg.assigned_to === data.user?.id;
+              return msg.assigned_to === pageData.user?.id;
             default:
               return true;
           }
@@ -85,10 +85,10 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           pollInterval = setInterval(async () => {
             const latestMessage = messages[0];
             if (latestMessage) {
-              // Only fetch messages newer than the latest one
+              // Use $data to access reactive props inside the interval
               const newRecords = await pb.collection('messages').getList(1, 5, {
                 sort: '-created',
-                filter: `company_id = "${data.user?.company_id}" && created > "${latestMessage.created}"`,
+                filter: `company_id = "${pageData.user?.company_id}" && created > "${latestMessage.created}"`,
                 expand: 'customer_id'
               });
               
@@ -119,7 +119,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         try {
           const records = await pb.collection('messages').getList(page, PER_PAGE, {
             sort: '-created',
-            filter: `company_id = "${data.user?.company_id}"`,
+            filter: `company_id = "${pageData.user?.company_id}"`,
             expand: 'customer_id'
           });
 
@@ -187,7 +187,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             month: 'short',
             day: 'numeric'
           }),
-          isYou: chat.company_id === data.user?.company_id
+          isYou: chat.company_id === pageData.user?.company_id
         };
       }
 
@@ -223,14 +223,14 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
         try {
           const messageData = {
-            customer_name: data.user?.name || 'Support Agent',
+            customer_name: pageData.user?.name || 'Support Agent',
             message: message,
             thread_id: selectedMessage.thread_id,
-            company_id: data.user?.company_id,
+            company_id: pageData.user?.company_id,
             status: 'replied',
             source: 'web',
             created: new Date().toISOString(),
-            initials: data.user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
+            initials: pageData.user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
             color: 'bg-primary'
           };
 
@@ -248,19 +248,21 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       // Add this function to load company members
       async function loadCompanyMembers() {
         try {
-          console.log('user', data.user);
-          // Use company_members collection instead of expanding company
-          const members = await pb.collection('company_members').getList(1, 50, {
-            filter: `company_id = "${data.user?.company_id}" && status = "active"`,
-            expand: 'user_id', // Expand the user relation to get user details
-            sort: '-created'
+          if (!pageData.user?.company_id) {
+            console.log('No company ID available');
+            return;
+          }
+
+          const company = await pb.collection('companies').getOne(pageData.user.company_id, {
+            expand: 'team_members'
           });
           
-          companyMembers = members.items.map((member: any) => ({
-            id: member.id,
-            name: member.expand?.user_id?.name || 'Unknown',
-            role: member.role
-          }));
+          if (company.expand?.team_members) {
+            companyMembers = company.expand.team_members.map((member: any) => ({
+              id: member.id,
+              name: member.name
+            }));
+          }
         } catch (err) {
           console.error('Error loading company members:', err);
         }
@@ -289,13 +291,13 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         
         try {
             await pb.collection('messages').update(messageId, {
-                assigned_to: data.user.id
+                assigned_to: pageData.user.id
             });
 
             // Update the local messages array by modifying the specific message
             messages = messages.map(msg => 
                 msg.id === messageId 
-                    ? { ...msg, assigned_to: data.user.id }
+                    ? { ...msg, assigned_to: pageData.user.id }
                     : msg
             );
 
@@ -511,7 +513,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Separator />
                                     {#each companyMembers as member}
-                                      {#if member.id !== data.user.id}
+                                      {#if member.id !== pageData.user.id}
                                         <DropdownMenu.Item 
                                           onclick={() => assignToMember(selectedMessage?.id, member.id)}
                                         >
