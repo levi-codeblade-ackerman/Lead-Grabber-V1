@@ -11,10 +11,22 @@ export const actions: Actions = {
     }
 
     try {
-      await locals.pb.collection('users').create(data)
+      // Create user with emailVisibility set to true
+      const userData = {
+        ...data,
+        emailVisibility: true
+      };
+      
+      await locals.pb.collection('users').create(userData);
       await locals.pb
         .collection('users')
         .authWithPassword(data.email, data.password)
+        .then(async (authData) => {
+          // Ensure emailVisibility is true after auth
+          await locals.pb.collection('users').update(authData.record.id, {
+            emailVisibility: true
+          });
+        });
     } catch (e) {
       console.error(e)
       return {

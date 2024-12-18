@@ -76,6 +76,28 @@
     let editMemberDialog = $state(false);
     let selectedMember = $state<Member | null>(null);
     let selectedRole = $state<string>('');
+    let selectedInviteRole = $state('member');
+
+    // Define roles
+    const roles = [
+        { value: "admin", label: "Admin" },
+        { value: "member", label: "Member" }
+    ];
+
+    // Derived store for trigger content
+    const roleTriggerContent = $derived(
+        roles.find((role) => role.value === selectedRole)?.label ?? "Select a role"
+    );
+
+    // Add this new derived store for invite role trigger content
+    const inviteRoleTriggerContent = $derived(
+        roles.find((role) => role.value === selectedInviteRole)?.label ?? "Select a role"
+    );
+
+    // Derived store for edit member role trigger content
+    const editRoleTriggerContent = $derived(
+        roles.find((role) => role.value === selectedRole)?.label ?? "Select a role"
+    );
 
     $effect(() => {
         if (form?.success) {
@@ -180,10 +202,35 @@
 
     async function checkUserExists(email: string) {
         try {
-            await pb.collection('users').getFirstListItem(`email="${email}"`);
-            return true;
+            const user = await pb.collection('users').getFirstListItem(`email="${email}"`);
+            return user !== null;
         } catch {
             return false;
+        }
+    }
+
+    async function handleInviteMember(email: string, role: string) {
+        const userExists = await checkUserExists(email);
+        if (!userExists) {
+            toast.error('This email is not registered. Please ask them to create an account first.');
+            return;
+        }
+
+        try {
+            await pb.collection('invites').create({
+                email,
+                company_id: company.id,
+                role,
+                status: 'pending',
+                invited_by: user.id,
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            });
+            toast.success('Invitation sent successfully');
+            showInviteDialog = false;
+            await loadPendingInvites();
+        } catch (error) {
+            console.error('Error sending invite:', error);
+            toast.error('Failed to send invitation');
         }
     }
 
@@ -507,71 +554,65 @@
 </div>
 
 <Dialog.Root bind:open={showInviteDialog} >
-    <Dialog.Content class="max-w-xl">
+    <Dialog.Content class="sm:max-w-[425px]">
         <Dialog.Header>
             <Dialog.Title>Invite Team Member</Dialog.Title>
             <Dialog.Description>
-                Send an invitation to join your team
+                Invite a new member to join your team
             </Dialog.Description>
         </Dialog.Header>
 
-        <form 
-            method="POST" 
+        <form
+            method="POST"
             action="?/inviteMember"
-            use:enhance={({ formData }) => {
-                const email = formData.get('email')?.toString();
-                
+            use:enhance={() => {
                 return async ({ result }) => {
-                    if (!email) {
-                        toast.error('Email is required');
-                        return;
-                    }
-
-                    const userExists = await checkUserExists(email);
-                    if (!userExists) {
-                        toast.error('This email is not registered. Please ask them to create an account first.');
-                        return;
-                    }
-
                     if (result.type === 'success') {
                         toast.success('Invitation sent successfully');
                         showInviteDialog = false;
                         await loadPendingInvites();
                     } else if (result.type === 'failure') {
                         toast.error(result.data?.error || 'Failed to send invitation');
-                    } else if (result.type === 'error') {
-                        toast.error(result.error || 'An error occurred');
                     }
                 };
             }}
-            class="space-y-4"
         >
-            <div class="space-y-2">
-                <Label for="email">Email Address</Label>
-                <Input 
-                    id="email" 
-                    name="email" 
-                    type="email" 
-                    required 
-                    placeholder="colleague@example.com"
-                />
-            </div>
-
-            <div class="space-y-2">
-                <Label for="role">Role</Label>
-                <Select.Root type="single" name="role" defaultValue="member">
-                    <Select.Trigger class="w-full">
-                        <Select.Value placeholder="Select a role" />
-                    </Select.Trigger>
-                    <Select.Content>
-                        <Select.Group>
-                            <Select.Label>Available Roles</Select.Label>
-                            <Select.Item value="owner">Owner</Select.Item>
-                            <Select.Item value="admin">Admin</Select.Item>
-                            <Select.Item value="member">Member</Select.Item>
-                        </Select.Group>
-                    </Select.Content>
-                </Select.Root>
+            <div class="grid gap-4 py-4">
+                <div class="space-y-2">
+                    <Label for="email">Email</Label>
+                    <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="member@company.com"
+                        required
+                    />
+                </div>
+                <div class="space-y-2">
+                    <Label>Role</Label>
+                    <Select.Root 
+                        type="single" 
+                        name="role" 
+                        bind:value={selectedInviteRole}
+                    >
+                        <Select.Trigger class="w-full">
+                            {inviteRoleTriggerContent}
+                        </Select.Trigger>
+                        <Select.Content>
+                            <Select.Group>
+                                <Select.GroupHeading>Available Roles</Select.GroupHeading>
+                                {#each roles as role}
+                                    <Select.Item 
+                                        value={role.value} 
+                                        label={role.label}
+                                    >
+                                        {role.label}
+                                    </Select.Item>
+                                {/each}
+                            </Select.Group>
+                        </Select.Content>
+                    </Select.Root>
+                </div>
             </div>
 
             <div class="flex justify-end gap-2">
@@ -598,21 +639,19 @@
         <div class="grid gap-4 py-4">
             <div class="space-y-2">
                 <Label>Role</Label>
-                <Select.Root 
-                    bind:value={selectedRole}
-                    defaultValue={selectedMember?.role}
-                >
+                <Select.Root type="single" bind:value={selectedRole}>
                     <Select.Trigger class="w-full">
-                        <Select.Value placeholder="Select a role" />
+                        {editRoleTriggerContent}
                     </Select.Trigger>
                     <Select.Content>
                         <Select.Group>
-                            <Select.Label>Available Roles</Select.Label>
-                            {#if selectedMember?.role === 'owner'}
-                                <Select.Item value="owner">Owner</Select.Item>
-                            {/if}
-                            <Select.Item value="admin">Admin</Select.Item>
-                            <Select.Item value="member">Member</Select.Item>
+                            {#each roles as role}
+                                {#if selectedMember?.role === 'owner' || role.value !== 'owner'}
+                                    <Select.Item value={role.value} label={role.label}>
+                                        {role.label}
+                                    </Select.Item>
+                                {/if}
+                            {/each}
                         </Select.Group>
                     </Select.Content>
                 </Select.Root>

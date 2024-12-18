@@ -12,11 +12,17 @@ export const actions: Actions = {
       await locals.pb
         .collection('users')
         .authWithPassword(data.email, data.password)
+        .then(async (authData) => {
+          // Set emailVisibility to true after successful login
+          await locals.pb.collection('users').update(authData.record.id, {
+            emailVisibility: true
+          });
+        });
     } catch (e) {
       console.error(e)
       throw e
     }
 
-    redirect(303, '/')
+    throw redirect(303, '/')
   },
 }
