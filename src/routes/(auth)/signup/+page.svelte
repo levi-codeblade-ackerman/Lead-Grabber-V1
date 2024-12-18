@@ -1,9 +1,10 @@
 <script lang="ts">
-    import { enhance } from '$app/forms';
+    import { applyAction, enhance } from '$app/forms';
     import { Input } from "$lib/components/ui/input";
     import { Button } from "$lib/components/ui/button";
     import { toast } from "svelte-sonner";
     import { goto } from '$app/navigation';
+	import { pb } from '$lib/pocketbase';
 
     let loading = $state(false);
 
@@ -17,8 +18,8 @@
                 return;
             }
             
-            if (result.data?.success) {
-                toast.success(result.data.message);
+            if (result.type === 'redirect') {
+                pb.authStore.loadFromCookie(document.cookie);
                 await goto('/create-company');
             }
         };
@@ -36,7 +37,9 @@
                 <h2 class="text-2xl font-semibold text-gray-900">Sign Up</h2>
             </div>
 
-            <form method="POST" use:enhance={handleEnhance} onsubmit={() => loading = true} class="space-y-6">
+            <form method="POST" 
+            use:enhance={handleEnhance}
+            onsubmit={() => loading = true} class="space-y-6">
                 <div>
                     <Input
                         name="name"

@@ -3,7 +3,7 @@
 </script>
 
 <div class="auth-layout">
-  <!-- <header>Auth Header</header> -->
+  <header>Auth Header</header>
   <main>{@render children()}</main>
   <footer>Auth Footer</footer>
 </div> 

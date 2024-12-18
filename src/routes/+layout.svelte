@@ -1,52 +1,37 @@
 <script lang="ts">
 	import '../app.css';
-	let { children, data } = $props();
-	import { onMount } from 'svelte';
-	import { initPocketBase } from '$lib/pocketbase';
-	import { authStore } from '$lib/stores/auth';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import type { AuthModel } from 'pocketbase';
-	import { Toaster } from "$lib/components/ui/sonner/index";
-	import { pb } from '$lib/pocketbase';
-	import { onNavigate } from '$app/navigation';
-	import LoadingBar from '$lib/components/loading-bar.svelte';
+	import { browser } from '$app/environment'
+  import { applyAction, enhance } from '$app/forms'
+  import { setUserContext } from '$lib/contexts/user'
+  import { pb } from '$lib/pocketbase'
+  import { onDestroy, type Snippet } from 'svelte'
+  import { writable } from 'svelte/store'
+  import type { PageData } from './$types'
+	import LoadingBar from '@//components/loading-bar.svelte';
+	import { Toaster } from 'svelte-sonner';
 
-	const publicRoutes = ['/login', '/signup', '/embed/leadbox'];
-	let initialized = $state(false);
+  interface Props {
+    data: PageData
+    children?: Snippet
+  }
 
-	onMount(async () => {
-		await initPocketBase();
-		if (data.user) {
-			authStore.setUser(data.user);
-		}
-		initialized = true;
-	});
+  let { data, children }: Props = $props()
 
-	$effect(() => {
-		if (!initialized) return;
+  // Initialize user store
+  const user = writable(data.user)
+  setUserContext(user)
 
-		const isPublicRoute = publicRoutes.some(
-			route => $page.url.pathname.startsWith(route)
-		);
-		
-		const isAuthenticated = pb.authStore.isValid && pb.authStore.token;
-		
-		// Use setTimeout to debounce navigation
-		const timeoutId = setTimeout(() => {
-			// Redirect to login if accessing protected route while not authenticated
-			if (!isPublicRoute && !isAuthenticated) {
-				goto('/login', { replaceState: true });
-			}
-			// Redirect to home if accessing login while authenticated
-			else if (isAuthenticated && $page.url.pathname.startsWith('/login')) {
-				goto('/', { replaceState: true });
-			}
-		}, 100); // 100ms debounce
+  if (browser) {
+    // Load user from cookie (client-side only)
+    pb.authStore.loadFromCookie(document.cookie)
 
-		// Cleanup timeout on effect cleanup
-		return () => clearTimeout(timeoutId);
-	});
+    // Update user store when auth store changes
+    const unsubscribe = pb.authStore.onChange(() => {
+      user.set(pb.authStore.record)
+      document.cookie = pb.authStore.exportToCookie({ httpOnly: false })
+    }, true)
+    onDestroy(unsubscribe)
+  }
 </script>
 
 <LoadingBar class="bg-primary" />

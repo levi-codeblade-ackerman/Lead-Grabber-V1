@@ -12,8 +12,10 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 	import { toast } from "svelte-sonner";
 	import { goto } from "$app/navigation";
 
-      let { data: pageData } = $props<{ user: any }>();
-      if(pageData.user.company_id === null || pageData.user.company_id === ""){
+  let { data } = $props();
+	let { user } = data;
+      console.log('data', data);
+      if(user.company_id === null || user.company_id === ""){
         goto('/create-company');
       }
       
@@ -66,7 +68,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             case 'unassigned':
               return !msg.assigned_to;
             case 'me':
-              return msg.assigned_to === pageData.user?.id;
+              return msg.assigned_to === user?.id;
             default:
               return true;
           }
@@ -92,7 +94,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
               // Use $data to access reactive props inside the interval
               const newRecords = await pb.collection('messages').getList(1, 5, {
                 sort: '-created',
-                filter: `company_id = "${pageData.user?.company_id}" && created > "${latestMessage.created}"`,
+                filter: `company_id = "${user?.company_id}" && created > "${latestMessage.created}"`,
                 expand: 'customer_id'
               });
               
@@ -123,7 +125,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         try {
           const records = await pb.collection('messages').getList(page, PER_PAGE, {
             sort: '-created',
-            filter: `company_id = "${pageData.user?.company_id}"`,
+            filter: `company_id = "${user?.company_id}"`,
             expand: 'customer_id'
           });
 
@@ -191,7 +193,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             month: 'short',
             day: 'numeric'
           }),
-          isYou: chat.company_id === pageData.user?.company_id
+          isYou: chat.company_id === user?.company_id
         };
       }
 
@@ -227,14 +229,14 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
         try {
           const messageData = {
-            customer_name: pageData.user?.name || 'Support Agent',
+            customer_name: user?.name || 'Support Agent',
             message: message,
             thread_id: selectedMessage.thread_id,
-            company_id: pageData.user?.company_id,
+            company_id: user?.company_id,
             status: 'replied',
             source: 'web',
             created: new Date().toISOString(),
-            initials: pageData.user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
+            initials: user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
             color: 'bg-primary'
           };
 
@@ -252,12 +254,12 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       // Add this function to load company members
       async function loadCompanyMembers() {
         try {
-          if (!pageData.user?.company_id) {
+          if (!user?.company_id) {
             console.log('No company ID available');
             return;
           }
 
-          const company = await pb.collection('companies').getOne(pageData.user.company_id, {
+          const company = await pb.collection('companies').getOne(user.company_id, {
             expand: 'team_members'
           });
           
@@ -295,13 +297,13 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         
         try {
             await pb.collection('messages').update(messageId, {
-                assigned_to: pageData.user.id
+                assigned_to: user.id
             });
 
             // Update the local messages array by modifying the specific message
             messages = messages.map(msg => 
                 msg.id === messageId 
-                    ? { ...msg, assigned_to: pageData.user.id }
+                    ? { ...msg, assigned_to: user.id }
                     : msg
             );
 
@@ -517,7 +519,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Separator />
                                     {#each companyMembers as member}
-                                      {#if member.id !== pageData.user.id}
+                                      {#if member.id !== user.id}
                                         <DropdownMenu.Item 
                                           onclick={() => assignToMember(selectedMessage?.id, member.id)}
                                         >

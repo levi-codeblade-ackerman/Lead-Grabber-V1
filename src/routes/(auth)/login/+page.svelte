@@ -1,10 +1,12 @@
 <script lang="ts">
-    import { enhance } from '$app/forms';
+    import { applyAction, enhance } from '$app/forms';
     import { Button } from "$lib/components/ui/button/index";
     import { Input } from "$lib/components/ui/input";
     import { goto } from '$app/navigation';
     import { toast } from 'svelte-sonner';
     import Spinner from "$lib/components/ui/spinner.svelte";
+    import { createInstance } from '$lib/pocketbase';
+     import { pb } from '$lib/pocketbase'
     
     export let form;
     let loading = false;
@@ -44,7 +46,12 @@
 
                 <form 
                     method="POST" 
-                    use:enhance={handleEnhance} 
+                    use:enhance={() => {
+                        return async ({ result }) => {
+                          pb.authStore.loadFromCookie(document.cookie)
+                          await applyAction(result)
+                        }
+                    }} 
                     onsubmit={() => loading = true} 
                     class="space-y-6"
                 >
