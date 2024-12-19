@@ -5,7 +5,9 @@
     import { toast } from "svelte-sonner";
     import { goto } from '$app/navigation';
     import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
-    
+    import { Input } from "$lib/components/ui/input";
+    import { Label } from "$lib/components/ui/label";
+   
     let { data } = $props<{
         data: {
             invite: {
@@ -27,6 +29,7 @@
     }>();
     
     let loading = $state(false);
+
 
     function handleAccept() {
         return async ({ result }) => {
@@ -65,25 +68,65 @@
                 </p>
             </div>
 
-            {#if data.requiresLogin}
-                <div class="text-center space-y-4">
-                    <p class="text-sm text-gray-600">
-                        Please log in with <span class="font-medium">{data.invite.email}</span> to accept this invitation.
-                    </p>
+            <form 
+                method="POST" 
+                use:enhance={handleAccept}
+                class="space-y-4"
+            >
+                {#if !data.requiresLogin && !data.wrongEmail}
                     <Button 
-                        onclick={() => goto(`/login?redirect=/invite/accept/${data.invite.id}`)}
-                        class="w-full"
+                        type="submit" 
+                        class="w-full" 
+                        disabled={loading}
                     >
-                        Log in to Accept
+                        {loading ? 'Accepting...' : 'Accept Invitation'}
                     </Button>
-                </div>
-            {:else if data.wrongEmail}
-                <div class="text-center space-y-4">
-                    <p class="text-sm text-red-600">
-                        You are currently logged in as <span class="font-medium">{data.currentUserEmail}</span>.<br>
-                        This invitation is for <span class="font-medium">{data.invite.email}</span>.
-                    </p>
-                    <div class="space-y-2">
+                {:else if data.requiresLogin}
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <Label for="name">Full Name</Label>
+                            <Input
+                                id="name"
+                                name="name"
+                                type="text"
+                                placeholder="Enter your full name"
+                                required
+                            />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="password">Create Password</Label>
+                            <Input
+                                id="password"
+                                name="password"
+                                type="password"
+                                placeholder="Enter a secure password"
+                                required
+                            />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="passwordConfirm">Confirm Password</Label>
+                            <Input
+                                id="passwordConfirm"
+                                name="passwordConfirm"
+                                type="password"
+                                placeholder="Confirm your password"
+                                required
+                            />
+                        </div>
+                        <Button 
+                            type="submit" 
+                            class="w-full" 
+                            disabled={loading}
+                        >
+                            {loading ? 'Creating Account...' : 'Create Account & Accept'}
+                        </Button>
+                    </div>
+                {:else}
+                    <div class="text-center space-y-4">
+                        <p class="text-sm text-red-600">
+                            You are currently logged in as <span class="font-medium">{data.currentUserEmail}</span>.<br>
+                            This invitation is for <span class="font-medium">{data.invite.email}</span>.
+                        </p>
                         <Button 
                             onclick={() => goto('/logout?redirect=/invite/accept/' + data.invite.id)}
                             variant="outline"
@@ -92,22 +135,8 @@
                             Log in with Different Account
                         </Button>
                     </div>
-                </div>
-            {:else}
-                <form 
-                    method="POST" 
-                    use:enhance={handleAccept}
-                    class="space-y-4"
-                >
-                    <Button 
-                        type="submit" 
-                        class="w-full" 
-                        disabled={loading}
-                    >
-                        {loading ? 'Accepting...' : 'Accept Invitation'}
-                    </Button>
-                </form>
-            {/if}
+                {/if}
+            </form>
         </Card.Content>
     </Card.Root>
 </div> 

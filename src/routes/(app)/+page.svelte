@@ -11,12 +11,24 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       import { pb } from '$lib/pocketbase';
 	import { toast } from "svelte-sonner";
 	import { goto } from "$app/navigation";
+	import { getUserContext } from "@//contexts/user.js";
 
+  const contextUser = getUserContext()
+  console.log('contextUser', $contextUser)
+        if ($contextUser == null) {
+            goto('/login');
+        }
   let { data } = $props();
 	let { user } = data;
       console.log('data', data);
-      if(user.company_id === null || user.company_id === ""){
+      if(user === null){
+        goto('/login');
+      }
+      if(user !== null && user?.company_id === null || user?.company_id === ""){
         goto('/create-company');
+      }
+      else{
+        goto('/settings/company');
       }
       
       // Add message data store
@@ -82,6 +94,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       const PER_PAGE = 20;
 
       onMount(async () => {
+       
         try {
           // Initial load of messages
           await loadMessages();

@@ -137,12 +137,6 @@ export const actions: Actions = {
                 return fail(400, { error: 'Email is required' });
             }
 
-            // Check if user exists first
-            const existingUser = await pb.collection('users').getFirstListItem(`email="${email}"`).catch(() => null);
-            if (!existingUser) {
-                return fail(400, { error: 'User must create an account before being invited' });
-            }
-
             // Get company and check if user has permission to invite
             const company = await pb.collection('companies').getOne(user.company_id, {
                 expand: 'team_members'
@@ -152,10 +146,8 @@ export const actions: Actions = {
                 return fail(403, { error: 'Only company owners can invite members' });
             }
 
-            // Check if already a team member
-            if (company.expand?.team_members?.some((m: any) => m.id === existingUser.id)) {
-                return fail(400, { error: 'User is already a team member' });
-            }
+            // Check if user already exists
+            const existingUser = await pb.collection('users').getFirstListItem(`email="${email}"`).catch(() => null);
 
             // Create invite record
             const invite = await pb.collection('invites').create({
@@ -164,7 +156,7 @@ export const actions: Actions = {
                 role,
                 status: 'pending',
                 invited_by: user.id,
-                user_id: existingUser.id,
+                user_id: existingUser?.id || null, // Make user_id optional
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
             });
 

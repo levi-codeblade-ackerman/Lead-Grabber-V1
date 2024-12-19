@@ -87,11 +87,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions = {
     default: async ({ request, locals, params }) => {
-        const user = locals.user;
-        if (!user) {
-            return fail(401, { error: 'You must be logged in to accept an invitation' });
-        }
-
         try {
             const invite = await pb.collection('invites').getOne(params.id);
             
@@ -99,7 +94,51 @@ export const actions = {
                 return fail(400, { error: 'Invalid invite' });
             }
 
-            // Create company member with invited role and permissions
+            const formData = await request.formData();
+            const name = formData.get('name')?.toString();
+            const password = formData.get('password')?.toString();
+            const passwordConfirm = formData.get('passwordConfirm')?.toString();
+            
+            let user = locals.user;
+
+            // If no user is logged in, create a new account
+            if (!user) {
+                if (!name || !password || !passwordConfirm) {
+                    return fail(400, { error: 'Name, password and confirmation are required' });
+                }
+
+                if (password !== passwordConfirm) {
+                    return fail(400, { error: 'Passwords do not match' });
+                }
+
+                try {
+                    // Create new user
+                    const userData = {
+                        email: invite.email,
+                        name,
+                        password,
+                        passwordConfirm,
+                        emailVisibility: true,
+                    };
+                    
+                    const newUser = await pb.collection('users').create(userData);
+                    
+                    // Log in the new user
+                    const authData = await pb.collection('users').authWithPassword(
+                        invite.email,
+                        password
+                    );
+                    
+                    user = authData.record;
+                } catch (error) {
+                    console.error('Error creating user:', error);
+                    return fail(500, { 
+                        error: error.response?.data?.message || 'Failed to create account'
+                    });
+                }
+            }
+
+            // Create company member
             await pb.collection('company_members').create({
                 user_id: user.id,
                 company_id: invite.company_id,
