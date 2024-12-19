@@ -1,6 +1,27 @@
 import { pb } from '$lib/pocketbase';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { TWILIO_ENABLED } from '$env/static/private';
+
+function getAutoReplyMessage(
+  source: string,
+  autoReplySettings: any,
+  currentHour: number
+): string | null {
+  if (!autoReplySettings?.textAutoReply) return null;
+
+  const isInBusinessHours = isBusinessHours(currentHour, autoReplySettings.businessHours);
+  
+  if (source === 'leadform') {
+    return isInBusinessHours 
+      ? autoReplySettings.leadformBusinessHoursMessage 
+      : autoReplySettings.leadformAfterHoursMessage;
+  }
+  
+  return isInBusinessHours 
+    ? autoReplySettings.businessHoursMessage 
+    : autoReplySettings.afterHoursMessage;
+}
 
 export const POST: RequestHandler = async ({ request }) => {
   const corsHeaders = {
@@ -78,6 +99,34 @@ export const POST: RequestHandler = async ({ request }) => {
     // Create the message in PocketBase
     const record = await pb.collection('messages').create(messageData);
     
+    // Send auto-reply via Twilio if enabled and phone number exists
+    if (TWILIO_ENABLED === 'true' && messageData.customer_phone) {
+      try {
+        const company = await pb.collection('companies').getOne(messageData.company_id);
+        const autoReplySettings = company.settings?.autoReply;
+        
+        const message = getAutoReplyMessage(
+          messageData.source,
+          autoReplySettings,
+          new Date().getHours()
+        );
+
+        if (message) {
+          await fetch('/api/twilio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message,
+              phoneNumber: messageData.customer_phone,
+              threadId: messageData.thread_id
+            })
+          });
+        }
+      } catch (twilioError) {
+        console.error('Error sending Twilio auto-reply:', twilioError);
+      }
+    }
+    
     return json(
       { success: true, message: record },
       {
@@ -95,6 +144,21 @@ export const POST: RequestHandler = async ({ request }) => {
     );
   }
 };
+
+function isBusinessHours(currentHour: number, businessHours: any) {
+  const day = new Date().toLocaleLowerCase();
+  const daySettings = businessHours[day];
+  
+  if (!daySettings?.isOpen) return false;
+  
+  const [start, end] = daySettings.hours.split(' - ').map(time => {
+    const [hour, period] = time.split(' ');
+    const [h] = hour.split(':');
+    return period === 'PM' ? (parseInt(h) + 12) % 24 : parseInt(h);
+  });
+  
+  return currentHour >= start && currentHour < end;
+}
 
 // Add OPTIONS handler for CORS preflight
 export const OPTIONS: RequestHandler = async () => {

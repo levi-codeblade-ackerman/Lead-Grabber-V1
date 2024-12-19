@@ -157,6 +157,8 @@
                         textAutoReply,
                         businessHoursMessage,
                         afterHoursMessage,
+                        leadformBusinessHoursMessage,
+                        leadformAfterHoursMessage,
                         businessHours
                     })} 
                 />

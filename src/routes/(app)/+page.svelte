@@ -253,14 +253,28 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             color: 'bg-primary'
           };
 
+          // Create message in PocketBase
           await pb.collection('messages').create(messageData);
+
+          // Send via Twilio if there's a phone number
+          if (selectedMessage.customer_phone) {
+            await fetch('/api/twilio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message,
+                phoneNumber: selectedMessage.customer_phone,
+                threadId: selectedMessage.thread_id
+              })
+            });
+          }
+
           input.value = '';
-          
-          // Immediately load new messages after sending
           await loadMessages();
 
         } catch (err) {
           console.error('Error sending message:', err);
+          toast.error('Failed to send message');
         }
       }
 
