@@ -2,6 +2,7 @@ import { pb } from '$lib/pocketbase';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { TWILIO_ENABLED } from '$env/static/private';
+import { createOrUpdateContact } from '$lib/utils/contacts';
 
 function getAutoReplyMessage(
   source: string,
@@ -56,6 +57,21 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
           headers: corsHeaders
         }
       );
+    }
+
+    // Create or update contact if we have contact info
+    if (messageData.customer_name || messageData.customer_email || messageData.customer_phone) {
+      try {
+        await createOrUpdateContact({
+          company_id: messageData.company_id,
+          name: messageData.customer_name,
+          email: messageData.customer_email,
+          phone: messageData.customer_phone
+        });
+      } catch (err) {
+        console.error('Error creating/updating contact:', err);
+        // Continue with message creation even if contact creation fails
+      }
     }
 
     // Verify company exists

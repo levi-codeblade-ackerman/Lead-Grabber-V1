@@ -8,28 +8,32 @@ export async function GET({ params, request, locals }) {
     pb.authStore.clear();
 
     let leadbox;
+    let company;
     if (params.id === 'default') {
       // Get the most recently created leadbox
       const leadboxes = await pb.collection('leadboxes').getList(1, 1, {
         sort: '-created'
       });
       leadbox = leadboxes.items[0];
+      company = await pb.collection('users').getOne(leadbox.owner);
     } else {
       leadbox = await pb.collection('leadboxes').getOne(params.id);
+      company = await pb.collection('users').getOne(leadbox.owner);
     }
 
     if (!leadbox) {
       throw error(404, 'Leadbox not found');
     }
 
-    const leadboxData: LeadboxData = typeof leadbox.leadbox_data === 'string' 
+    const leadboxData = typeof leadbox.leadbox_data === 'string' 
       ? JSON.parse(leadbox.leadbox_data)
       : leadbox.leadbox_data;
 
     const jsCode = `
       (function() {
         const leadboxData = ${JSON.stringify({ ...leadboxData, leadBoxOpen: false })};
-        const leadboxOwner = "${leadbox.owner}";
+        const leadboxOwner = "${company.company_id}";
+        const companyId = "${company.company_id}";
         const baseUrl = "${PUBLIC_BASE_URL}";
         
         console.log('leadboxData', leadboxData);
@@ -182,6 +186,24 @@ export async function GET({ params, request, locals }) {
                 transform: translateY(20px);
               }
             }
+            .clearsky-form-fields {
+              display: flex;
+              flex-direction: column;
+              gap: 1rem;
+              padding: 1rem;
+            }
+            .clearsky-input {
+              width: 100%;
+              padding: 0.75rem;
+              border: 1px solid #E5E7EB;
+              border-radius: 0.375rem;
+              font-size: 0.875rem;
+              background-color: white;
+            }
+            .clearsky-input:focus {
+              outline: 2px solid #3B5BDB;
+              outline-offset: 2px;
+            }
           \`;
           document.head.appendChild(style);
         }
@@ -269,7 +291,84 @@ export async function GET({ params, request, locals }) {
           return icons[iconName] || '';
         }
 
-     
+        async function handleFormSubmit(event) {
+          event.preventDefault();
+          const form = event.target;
+          const formData = new FormData(form);
+          const data = Object.fromEntries(formData);
+
+          try {
+            const initials = data.name 
+              ? data.name.split(' ').map(n => n[0]).join('').toUpperCase() 
+              : '??';
+
+            const messageContent = data.message || '';
+
+            const messageData = {
+              customer_name: data.name || "Anonymous",
+              customer_email: "",
+              customer_phone: data.mobile || "",
+              message: messageContent,
+              source: "leadbox",
+              status: "new",
+              thread_id: crypto.randomUUID(),
+              source_url: window.location.href,
+              company_id: companyId,
+              created: new Date().toISOString(),
+              initials: initials,
+              color: "bg-primary",
+              company: {
+                id: companyId
+              }
+            };
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            try {
+              const response = await fetch(baseUrl + '/api/messages', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(messageData),
+                mode: 'cors',
+                signal: controller.signal
+              });
+
+              clearTimeout(timeoutId);
+
+              if (!response.ok) {
+                console.error('Server error:', response.status);
+                const errorData = await response.json().catch(() => null);
+                console.error('Error data:', errorData);
+                form.innerHTML = '<div style="text-align: center; padding: 2rem; color: #EF4444;">' +
+                  '<h3>Error</h3><p>There was an error submitting your message. Please try again.</p></div>';
+                return;
+              }
+
+              form.innerHTML = '<div style="text-align: center; padding: 2rem;">' +
+                '<h3>Thank you!</h3><p>Your message has been received.</p></div>';
+
+            } catch (fetchError) {
+              clearTimeout(timeoutId);
+              console.error('Fetch error:', fetchError);
+              
+              let errorMessage = 'There was an error submitting your message. Please try again.';
+              if (fetchError.name === 'AbortError') {
+                console.error('Request timed out');
+                errorMessage = 'The request took too long. Please try again.';
+              }
+
+              form.innerHTML = '<div style="text-align: center; padding: 2rem; color: #EF4444;">' +
+                \`<h3>Error</h3><p>\${errorMessage}</p></div>\`;
+            }
+          } catch (error) {
+            console.error('Error in handleFormSubmit:', error);
+            form.innerHTML = '<div style="text-align: center; padding: 2rem; color: #EF4444;">' +
+              '<h3>Error</h3><p>There was an error submitting your message. Please try again.</p></div>';
+          }
+        }
 
         function createOpenLeadbox() {
           return \`
@@ -280,14 +379,46 @@ export async function GET({ params, request, locals }) {
               <div class="clearsky-content">
                 <div class="clearsky-logo">
                   <img 
-                      src="\${leadboxData.logoImage}" 
-                      alt="Company Logo" 
-                      class="w-[164px] h-[82px] object-contain absolute top-[-40px] z-10"
+                    src="\${leadboxData.logoImage}" 
+                    alt="Company Logo" 
+                    class="w-[164px] h-[82px] object-contain absolute top-[-40px] z-10"
                   />
                 </div>
-                <div class="clearsky-buttons">
-                  \${leadboxData.channels.map(channel => createChannelButton(channel)).join('')}
-                </div>
+                \${leadboxData.textOnly ? \`
+                  <form id="clearsky-form" onsubmit="handleFormSubmit(event)" class="clearsky-form-fields">
+                    <input 
+                      type="text"
+                      name="name"
+                      placeholder="Name"
+                      class="clearsky-input"
+                      required
+                    />
+                    <input 
+                      type="tel"
+                      name="mobile"
+                      placeholder="Mobile Number"
+                      class="clearsky-input"
+                      required
+                    />
+                    <textarea 
+                      name="message"
+                      placeholder="Message"
+                      class="clearsky-input"
+                      style="min-height: 100px;"
+                      required
+                    ></textarea>
+                    <div class="text-sm text-gray-500 mb-4 text-center">
+                      By submitting, you agree to receive text messages at this mobile number. Message & data rates apply.
+                    </div>
+                    <button type="submit" class="clearsky-button" style="background-color: #3B5BDB;">
+                      Send Message
+                    </button>
+                  </form>
+                \` : \`
+                  <div class="clearsky-buttons">
+                    \${leadboxData.channels.map(channel => createChannelButton(channel)).join('')}
+                  </div>
+                \`}
                 <div class="clearsky-terms">
                   Use subject to terms • Lead&Terms
                 </div>
@@ -370,7 +501,7 @@ export async function GET({ params, request, locals }) {
             const timeoutId = setTimeout(() => controller.abort(), 5000);
 
             try {
-              const response = await fetch(\`\${baseUrl}/api/messages\`, {
+              const response = await fetch(baseUrl + '/api/messages', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json'
@@ -407,8 +538,9 @@ export async function GET({ params, request, locals }) {
           container.id = 'clearsky-leadbox-${params.id}';
           container.className = 'clearsky-container';
           
-          // Add handleChannelClick to window object
+          // Add handlers to window object
           window.handleChannelClick = handleChannelClick;
+          window.handleFormSubmit = handleFormSubmit;
           
           container.innerHTML = createClosedLeadbox();
           
