@@ -43,6 +43,7 @@
 		"nodemailer": "^6.9.16",
 		"pocketbase": "^0.22.1",
 		"svelte-dnd-action": "^0.9.52",
+		"svelte-use-form": "^2.10.0",
 		"twilio": "^5.4.0"
 	}
 }

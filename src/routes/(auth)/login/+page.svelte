@@ -1,23 +1,30 @@
 <script lang="ts">
     import { applyAction, enhance } from '$app/forms';
-    import { Button } from "$lib/components/ui/button/index";
+    import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { goto } from '$app/navigation';
     import { toast } from 'svelte-sonner';
     import Spinner from "$lib/components/ui/spinner.svelte";
-    import { createInstance } from '$lib/pocketbase';
-     import { pb } from '$lib/pocketbase'
+    import { pb } from '$lib/pocketbase';
+    import { useForm, HintGroup, Hint, validators, email, required } from 'svelte-use-form';
+    import { slide } from 'svelte/transition';
+    import { quintOut } from 'svelte/easing';
     
-    export let form;
-    let loading = false;
+    let { form } = $props<{ form?: any }>();
+    let loading = $state(false);
+    const formValidation = useForm();
 
     function handleEnhance() {
         return async ({ result }) => {
-            if (result.type === 'success') {
-                toast.success(result.data.message);
-                await goto(result.data.redirectTo);
-            } else {
-                toast.error(result.data?.message || 'Login failed');
+            loading = false;
+
+            if (result.type === 'redirect') {
+                toast.success('Login successful');
+                pb.authStore.loadFromCookie(document.cookie);
+                await applyAction(result);
+            }
+            else {
+                toast.error(result.data.message);
             }
         };
     }
@@ -46,43 +53,53 @@
 
                 <form 
                     method="POST" 
+                    use:formValidation
                     use:enhance={() => {
-                        return async ({ result }) => {
-                          pb.authStore.loadFromCookie(document.cookie)
-                          await applyAction(result)
+                        if (!$formValidation.valid) {
+                            toast.error('Please fill in all required fields correctly');
+                            return;
                         }
-                    }} 
-                    onsubmit={() => loading = true} 
+                        loading = true;
+                        return handleEnhance();
+                    }}
                     class="space-y-6"
                 >
                     <div>
-                        <Input
+                        <input
                             name="email"
                             type="email"
                             placeholder="Email"
                             required
+                            use:validators={[required, email]}
                             class="w-full px-4 py-3 rounded-lg bg-gray-100 border-transparent focus:border-primary/60 focus:bg-white focus:ring-0"
                         />
+                        <HintGroup for="email">
+                            <div transition:slide={{ delay: 250, duration: 300, easing: quintOut, axis: 'y' }}>
+                                <Hint on="required" class="text-red-500 text-sm mt-1">Email is required</Hint>
+                                <Hint on="email" hideWhenRequired class="text-red-500 text-sm mt-1">Email is not valid</Hint>
+                            </div>
+                        </HintGroup>
                     </div>
 
                     <div>
-                        <Input
+                        <input
                             name="password"
                             type="password"
                             placeholder="Password"
                             required
+                            use:validators={[required]}
                             class="w-full px-4 py-3 rounded-lg bg-gray-100 border-transparent focus:border-primary/60 focus:bg-white focus:ring-0"
                         />
+                        <HintGroup for="password">
+                            <div transition:slide={{ delay: 250, duration: 300, easing: quintOut, axis: 'y' }}>
+                                <Hint on="required" class="text-red-500 text-sm mt-1">Password is required</Hint>
+                            </div>
+                        </HintGroup>
                     </div>
 
-                    {#if form?.error}
-                        <p class="text-red-500 text-sm">{form.error}</p>
-                    {/if}
-
-                   
-                    <Button
-                        type="submit"
-                        disabled={loading}
+                    <Button 
+                        type="submit" 
+                        disabled={loading || !$formValidation.valid}
                         class="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-white font-medium rounded-lg flex items-center justify-center gap-2"
                     >
                         {#if loading}

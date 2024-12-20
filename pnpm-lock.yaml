@@ -20,6 +20,9 @@ importers:
       svelte-dnd-action:
         specifier: ^0.9.52
         version: 0.9.52(svelte@5.2.11)
+      svelte-use-form:
+        specifier: ^2.10.0
+        version: 2.10.0(svelte@5.2.11)
       twilio:
         specifier: ^5.4.0
         version: 5.4.0
@@ -1645,6 +1648,11 @@ packages:
     peerDependencies:
       svelte: ^5.0.0-next.126
 
+  svelte-use-form@2.10.0:
+    resolution: {integrity: sha512-RSYkfRCmJF+2dm4UzhCdORjwmAM+Vueg+Blqcui1It8wsicLnfpUgtXbHWw9NxhXB4cHz88EDK63cxqmamhEyA==}
+    peerDependencies:
+      svelte: '>=3.46.0 < 5'
+
   svelte@5.2.11:
     resolution: {integrity: sha512-rAVKne02inlyw//aD1QXuUbxDBNnyW6sagS7JfxzUbGVuJnHrf2WfQdJDYlBq8mOz8NBGQAZdD6KEITd0NUDtA==}
     engines: {node: '>=18'}
@@ -3215,6 +3223,10 @@ snapshots:
     dependencies:
       clsx: 2.1.1
       style-to-object: 1.0.8
+      svelte: 5.2.11
+
+  svelte-use-form@2.10.0(svelte@5.2.11):
+    dependencies:
       svelte: 5.2.11
 
   svelte@5.2.11:
