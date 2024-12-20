@@ -27,22 +27,10 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       if(user !== null && user?.company_id === null || user?.company_id === ""){
         goto('/create-company');
       }
-      else{
-        goto('/settings/company');
-      }
+     
       
       // Add message data store
-      let messages = $state<{
-        initials: string;
-        name: string;
-        message: string;
-        time: string;
-        color: string;
-        id: string;
-        thread_id: string;
-        created: string;
-        assigned_to: string;
-      }[]>([]);
+      let messages = $state<Message[]>([]);
       let selectedMessage = $state<{
         thread_id: string;
         [key: string]: any;
@@ -55,6 +43,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         email?: string;
         time: string;
         isYou: boolean;
+        timestamp: string;
       }[]>([]);
 
       // Remove the unsubscribe variable declaration and replace with polling interval
@@ -164,24 +153,43 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       // Separate chat messages loading
       async function loadChatMessages(threadId: string) {
         try {
-          const records = await pb.collection('messages').getList(1, 20, {
-            sort: 'created',
-            filter: `thread_id = "${threadId}"`,
-            expand: 'customer_id'
-          });
-          chatMessages = records.items.map(formatChatMessage);
+          const thread = await pb.collection('messages').getFirstListItem(`thread_id="${threadId}"`);
+          
+          if (!thread.messages || thread.messages.length === 0) {
+            console.error('No messages found in thread');
+            chatMessages = [];
+            return;
+          }
+
+          chatMessages = thread.messages.map((msg: any, index: number) => ({
+            sender: msg.is_agent_reply ? msg.agent_name || 'Agent' : thread.customer_name,
+            message: msg.content,
+            phone: index === 0 ? thread.customer_phone : undefined,  // Only show contact info for first message
+            email: index === 0 ? thread.customer_email : undefined,  // Only show contact info for first message
+            time: new Date(msg.timestamp).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            }),
+            isYou: msg.is_agent_reply,
+            timestamp: msg.timestamp
+          })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        } catch (err) {
+          console.error('Error loading chat messages:', err);
+          chatMessages = [];
         } finally {
           isLoadingChat = false;
         }
       }
 
       // Helper function to format message consistently
-      function formatMessage(msg: any) {
+      function formatMessage(msg: Message) {
+        const lastMessage = msg.messages[msg.messages.length - 1];
         return {
           initials: msg.initials || (msg.customer_name?.split(' ').map((n: string) => n[0]).join('') || '??'),
           name: msg.customer_name || 'Unknown',
-          message: msg.message,
-          time: new Date(msg.created).toLocaleTimeString([], { 
+          message: lastMessage?.content || '',
+          time: new Date(lastMessage?.timestamp || msg.created).toLocaleTimeString([], { 
             hour: '2-digit', 
             minute: '2-digit' 
           }),
@@ -190,23 +198,9 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           thread_id: msg.thread_id,
           created: msg.created,
           assigned_to: msg.assigned_to,
-        };
-      }
-
-      // Helper function to format chat message
-      function formatChatMessage(chat: any) {
-        return {
-          sender: chat.customer_name || 'Unknown',
-          message: chat.message,
-          phone: chat.customer_phone || '',
-          email: chat.customer_email || '',
-          time: new Date(chat.created).toLocaleString([], { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            month: 'short',
-            day: 'numeric'
-          }),
-          isYou: chat.company_id === user?.company_id
+          customer_phone: msg.customer_phone,
+          customer_email: msg.customer_email,
+          status: msg.status
         };
       }
 
@@ -217,60 +211,76 @@ import HeaderTag from "$lib/components/header-tag.svelte";
         isLoadingChat = true;
         
         try {
-          const records = await pb.collection('messages').getList(1, 50, {
-            sort: 'created',
-            filter: `thread_id = "${msg.thread_id}"`,
-            expand: 'customer_id'
-          });
-
-          chatMessages = records.items.map(formatChatMessage);
+          await loadChatMessages(msg.thread_id);
         } catch (err) {
           console.error('Error loading chat history:', err);
+          chatMessages = [];
         } finally {
           isLoadingChat = false;
         }
       }
 
       // Function to send a new message
-      async function sendMessage(event: SubmitEvent) {
-        if (!selectedMessage) return;
-        
-        const form = event.target as HTMLFormElement;
+      async function sendMessage(e: Event) {
+        e.preventDefault(); // Prevent form submission
+        const form = e.target as HTMLFormElement;
         const input = form.querySelector('input') as HTMLInputElement;
         const message = input.value.trim();
-        if (!message) return;
+
+        if (!message || !selectedMessage) return;
+
+        // Clear input immediately
+        input.value = '';
 
         try {
-          const messageData = {
-            customer_name: user?.name || 'Support Agent',
-            message: message,
-            thread_id: selectedMessage.thread_id,
-            company_id: user?.company_id,
-            status: 'replied',
-            source: 'web',
-            created: new Date().toISOString(),
-            initials: user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '??',
-            color: 'bg-primary'
-          };
-
-          // Create message in PocketBase
-          await pb.collection('messages').create(messageData);
+          const existingThread = await pb.collection('messages').getFirstListItem(`thread_id="${selectedMessage.thread_id}"`);
+          
+          // Update the thread with the new message
+          const updatedThread = await pb.collection('messages').update(existingThread.id, {
+            messages: [...existingThread.messages, {
+              content: message,
+              timestamp: new Date().toISOString(),
+              is_agent_reply: true,
+              agent_id: user.id,
+              agent_name: user.name
+            }],
+            status: 'replied'
+          });
 
           // Send via Twilio if there's a phone number
-          if (selectedMessage.customer_phone) {
-            await fetch('/api/twilio', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                message,
-                phoneNumber: selectedMessage.customer_phone,
-                threadId: selectedMessage.thread_id
-              })
-            });
-          }
+          if (existingThread.customer_phone) {
+            try {
+              console.log('Sending SMS to:', existingThread.customer_phone);
+              const twilioResponse = await fetch('/api/twilio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  message,
+                  phoneNumber: existingThread.customer_phone,
+                  threadId: existingThread.thread_id
+                })
+              });
 
-          input.value = '';
-          await loadMessages();
+              const twilioResult = await twilioResponse.json();
+              if (!twilioResult.success) {
+                console.error('Failed to send SMS:', twilioResult.error);
+                toast.error('Failed to send SMS');
+              } else {
+                console.log('SMS sent successfully');
+              }
+            } catch (twilioError) {
+              console.error('Error sending SMS:', twilioError);
+              toast.error('Failed to send SMS');
+            }
+          }
+          
+          // Update the messages list with the new thread
+          messages = messages.map(msg => 
+            msg.thread_id === updatedThread.thread_id ? formatMessage(updatedThread) : msg
+          );
+          
+          // Update chat messages
+          await loadChatMessages(selectedMessage.thread_id);
 
         } catch (err) {
           console.error('Error sending message:', err);
@@ -495,69 +505,42 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                             {/each}
                         </div>
                     {:else}
-                        <div class="flex flex-col gap-4 p-4">
-                            {#each chatMessages as msg}
-                                <div class="border border-dashed border-gray-200 rounded-lg p-4">
-                                    <div class="flex items-center gap-2 mb-2">
-                                        <svg class="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span class="font-medium">Leadform submission</span>
-                                    </div>
-                                    
-                                    <div class="space-y-2 text-sm">
-                                        <div class="flex">
-                                            <span class="font-medium w-24">Name:</span>
-                                            <span>{msg.sender}</span>
-                                        </div>
-                                        
-                                        <div class="flex">
-                                            <span class="font-medium w-24">Phone:</span>
-                                            <span>{msg.phone || 'N/A'}</span>
-                                        </div>
-                                        
-                                        <div class="flex">
-                                            <span class="font-medium w-24">Email:</span>
-                                            <span>{msg.email || 'N/A'}</span>
-                                        </div>
-                                        
-                                        <div class="flex">
-                                            <span class="font-medium w-24">Message:</span>
-                                            <span>{msg.message}</span>
-                                        </div>
-                                    </div>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                            {#if isLoadingChat}
+                                <div class="flex justify-center">
+                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </div>
-                            {/each}
-                            <div class="w-full">
-                              <DropdownMenu.Root>
-                                <DropdownMenu.Trigger>
-                                  <Button class="bg-primary text-white w-full">
-                                    <UserPlus class="w-5 h-5 mr-2" />
-                                    {selectedMessage?.assigned_to ? 'Reassign' : 'Assign'}
-                                  </Button>
-                                </DropdownMenu.Trigger>
-                                <DropdownMenu.Content class="w-56">
-                                  <DropdownMenu.Group>
-                                    <DropdownMenu.Label>Assign to</DropdownMenu.Label>
-                                    <DropdownMenu.Item 
-                                      onclick={() => assignToMe(selectedMessage?.id)}
-                                    >
-                                      Assign to me
-                                    </DropdownMenu.Item>
-                                    <DropdownMenu.Separator />
-                                    {#each companyMembers as member}
-                                      {#if member.id !== user.id}
-                                        <DropdownMenu.Item 
-                                          onclick={() => assignToMember(selectedMessage?.id, member.id)}
-                                        >
-                                          {member.name}
-                                        </DropdownMenu.Item>
-                                      {/if}
-                                    {/each}
-                                  </DropdownMenu.Group>
-                                </DropdownMenu.Content>
-                              </DropdownMenu.Root>
-                            </div>
+                            {:else}
+                                {#each chatMessages as message, i}
+                                    {#if i === 0}
+                                        <!-- Initial message with all details -->
+                                        <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                                            <h3 class="text-sm font-medium mb-2">Initial Message</h3>
+                                            <div class="space-y-2 text-sm">
+                                                <div><span class="text-gray-500">From:</span> {message.sender}</div>
+                                                {#if message.phone}<div><span class="text-gray-500">Phone:</span> {message.phone}</div>{/if}
+                                                {#if message.email}<div><span class="text-gray-500">Email:</span> {message.email}</div>{/if}
+                                                <div class="mt-3 p-3 bg-white rounded">
+                                                    <span class="text-gray-500">Message:</span>
+                                                    <div class="mt-1">{message.message}</div>
+                                                </div>
+                                                <div class="text-xs text-gray-500 mt-2">{message.time}</div>
+                                            </div>
+                                        </div>
+                                    {:else}
+                                        <!-- Regular chat message -->
+                                        <div class="flex {message.isYou ? 'justify-end' : 'justify-start'}">
+                                            <div class="max-w-[70%] {message.isYou ? 'bg-primary text-white' : 'bg-gray-100'} rounded-lg p-3">
+                                                <div class="text-xs {message.isYou ? 'text-blue-100' : 'text-gray-500'} mb-1">{message.sender}</div>
+                                                <div class="text-sm">{message.message}</div>
+                                                <div class="text-xs {message.isYou ? 'text-blue-100' : 'text-gray-500'} mt-1">
+                                                    {message.time}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {/if}
+                                {/each}
+                            {/if}
                         </div>
                     {/if}
                 {:else}

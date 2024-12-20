@@ -42,6 +42,7 @@
 		"@sveltejs/adapter-node": "^5.2.10",
 		"nodemailer": "^6.9.16",
 		"pocketbase": "^0.22.1",
-		"svelte-dnd-action": "^0.9.52"
+		"svelte-dnd-action": "^0.9.52",
+		"twilio": "^5.4.0"
 	}
 }
