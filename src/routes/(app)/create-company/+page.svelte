@@ -4,6 +4,7 @@
     import { Button } from "$lib/components/ui/button";
     import { toast } from "svelte-sonner";
     import { goto } from '$app/navigation';
+    import { invalidateAll } from '$app/navigation';
 
     let loading = $state(false);
 
@@ -18,7 +19,8 @@
             
             if (result.type === 'success') {
                 toast.success('Company created successfully!');
-                goto('/');
+                await invalidateAll();
+                goto('/settings/company');
             }
             
             await update();

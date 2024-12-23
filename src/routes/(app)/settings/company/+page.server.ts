@@ -3,6 +3,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { PUBLIC_BASE_URL } from '$env/static/public';
+import { TWILIO_PHONE_NUMBER } from '$env/static/private';
 
 export const load: PageServerLoad = async ({ locals }) => {
     const user = locals.user;
@@ -101,7 +102,9 @@ export const actions: Actions = {
                     notifications: {
                         email: emailNotifications,
                         web: webNotifications
-                    }
+                    },
+                    twilio_phone_number: TWILIO_PHONE_NUMBER,
+                    webhook_url: `${PUBLIC_BASE_URL}/api/twilio/webhook`
                 })
             };
 

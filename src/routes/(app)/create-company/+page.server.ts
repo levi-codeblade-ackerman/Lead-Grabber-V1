@@ -55,83 +55,7 @@ export const actions: Actions = {
                 })
             });
 
-            // Create default leadbox
-            const defaultLeadbox = await pb.collection('leadboxes').create({
-                owner: user.id,
-                name: "Default Leadbox",
-                status: "active",
-                leadbox_data: JSON.stringify({
-                    textOnly: true,
-                    iconOnly: false,
-                    leadBoxOpen: true,
-                    primaryIconOnly: false,
-                    channels: [
-                        { name: "Text", icon: "MessageSquare", value: "Text Us", url: "sms://", target: "_blank", buttonColor: "#40C4AA", showIcon: true },
-                        { name: "Call", icon: "Phone", value: "Request a Call", url: "tel://", target: "_blank", buttonColor: "#3B5BDB", showIcon: true },
-                        { name: "Watch", icon: "Play", value: "Watch a Demo", url: "https://", target: "_blank", buttonColor: "#3B5BDB", showIcon: true },
-                    ],
-                    secondaryButton: {
-                        text: "Call us now!",
-                        icon: "MessageSquare",
-                        showIcon: true
-                    },
-                    logoImage: '/img/gen-can-expo.png'
-                })
-            });
-
-            // Create default leadform
-            const defaultLeadform = await pb.collection('leadforms').create({
-                owner: user.id,
-                name: "Default Form",
-                status: "active",
-                form_data: JSON.stringify({
-                    settings: {
-                        heading: "Contact Us",
-                        intro: "We'll get back to you as soon as possible.",
-                        buttonText: "Send Message",
-                        buttonColor: "#2E53D9",
-                        privacyPolicy: {
-                            type: "default",
-                            link: ""
-                        },
-                        customConfirmation: {
-                            type: "default",
-                            link: ""
-                        }
-                    },
-                    formElements: [
-                        {
-                            id: "name",
-                            type: "text",
-                            label: "Full Name",
-                            required: true,
-                            isDefault: true
-                        },
-                        {
-                            id: "email",
-                            type: "email",
-                            label: "Email",
-                            required: true,
-                            isDefault: true
-                        },
-                        {
-                            id: "phone",
-                            type: "phone",
-                            label: "Phone",
-                            required: true,
-                            isDefault: true
-                        },
-                        {
-                            id: "message",
-                            type: "message",
-                            label: "Message",
-                            required: true,
-                            isDefault: true
-                        }
-                    ]
-                })
-            });
-            
+        
             // Update the user's record with the company ID
             await pb.collection('users').update(user.id, {
                 company_id: company.id
@@ -142,8 +66,18 @@ export const actions: Actions = {
                 user: user.id,
                 company: company.id,
                 role: 'owner',
-                permissions: DEFAULT_PERMISSIONS.owner
+                permissions: DEFAULT_PERMISSIONS.owner,
+                status: 'active',
+                joined_at: new Date().toISOString()
             });
+
+            // Update the auth store with the new company_id
+            const authData = locals.pb.authStore.model;
+            locals.pb.authStore.clear();
+            await locals.pb.collection('users').authWithPassword(
+                authData.email,
+                authData.password
+            );
             
             return { success: true };
         } catch (error) {

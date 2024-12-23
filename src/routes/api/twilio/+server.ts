@@ -7,9 +7,9 @@ const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 // Helper function to determine if we should use test number
 function getTargetPhoneNumber(phoneNumber: string): string {
-  if (NODE_ENV === 'development') {
-    return '+17052749564'; // Test number for development
-  }
+  // if (NODE_ENV === 'development') {
+  //   return '+17052749564'; // Test number for development
+  // }
   return phoneNumber;
 }
 
