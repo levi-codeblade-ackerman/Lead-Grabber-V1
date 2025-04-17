@@ -23,15 +23,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const targetNumber = getTargetPhoneNumber(phoneNumber);
 
-    // Send message via Twilio
+    // Send message via Twilio with thread_id in the body
     const twilioMessage = await client.messages.create({
-      body: message,
+      body: `${message}\n\n#${threadId}`, // Add thread_id as a hidden tag
       from: TWILIO_PHONE_NUMBER,
       to: targetNumber,
     });
-
-    // Add a delay to prevent rate limiting
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
     return json({ 
       success: true, 

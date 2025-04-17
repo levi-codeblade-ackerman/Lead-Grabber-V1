@@ -55,7 +55,6 @@ export const actions: Actions = {
                 })
             });
 
-        
             // Update the user's record with the company ID
             await pb.collection('users').update(user.id, {
                 company_id: company.id
@@ -71,15 +70,14 @@ export const actions: Actions = {
                 joined_at: new Date().toISOString()
             });
 
-            // Update the auth store with the new company_id
-            const authData = locals.pb.authStore.model;
-            locals.pb.authStore.clear();
-            await locals.pb.collection('users').authWithPassword(
-                authData.email,
-                authData.password
-            );
+            // Refresh auth data
+            await locals.pb.collection('users').authRefresh();
             
-            return { success: true };
+            // Return success response instead of redirect
+            return {
+                success: true,
+                companyId: company.id
+            };
         } catch (error) {
             console.error('Error creating company:', error);
             return fail(500, { error: 'Failed to create company' });

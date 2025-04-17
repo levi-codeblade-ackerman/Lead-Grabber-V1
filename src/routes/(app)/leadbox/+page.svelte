@@ -8,7 +8,7 @@
     import { toast } from 'svelte-sonner';
     import { enhance } from '$app/forms';
 	import { getLeadboxEmbedCode } from "$lib/utils/getEmbedCode.js";
-    import { pb } from '$lib/pocketbase';
+    import { pb, getFileUrl } from '$lib/pocketbase';
     import * as Dialog from "$lib/components/ui/dialog/index";
     import { Copy, Check } from "lucide-svelte";
     import { getSvgIcon } from '$lib/utils/getSvgIcon';
@@ -72,7 +72,7 @@
             formData.append('user', user.id);
 
             const record = await pb.collection('logos').create(formData);
-            logoImage = pb.files.getUrl(record, record.logo);
+            logoImage = getFileUrl(record, record.logo);
             toast.success('Logo uploaded successfully!');
         } catch (err) {
             toast.error('Error uploading logo');

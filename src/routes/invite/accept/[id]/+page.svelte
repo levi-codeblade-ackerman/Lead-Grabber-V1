@@ -7,6 +7,7 @@
     import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
+    import { getFileUrl } from '$lib/pocketbase';
    
     let { data } = $props<{
         data: {
@@ -58,7 +59,7 @@
             <div class="text-center">
                 {#if data.invite.company.logo}
                     <img 
-                        src={`${PUBLIC_POCKETBASE_URL}/api/files/${data.invite.company.collectionId}/${data.invite.company.id}/${data.invite.company.logo}`}
+                        src={getFileUrl(data.invite.company, data.invite.company.logo)}
                         alt="Company Logo"
                         class="mx-auto h-16 w-auto"
                     />

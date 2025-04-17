@@ -12,7 +12,7 @@
     import { onDestroy, onMount } from 'svelte';
     import * as Dialog from "$lib/components/ui/dialog/index";
     import * as Select from "$lib/components/ui/select/index.js";
-    import { pb } from '$lib/pocketbase';
+    import { pb, getFileUrl } from '$lib/pocketbase';
     import RoleBadge from '$lib/components/RoleBadge.svelte';
     import { formatDate } from '$lib/utils/date';
 
@@ -108,7 +108,7 @@
 
     function getLogoUrl(filename: string) {
         if (!filename) return '';
-        return `${PUBLIC_POCKETBASE_URL}/api/files/${company.collectionId}/${company.id}/${filename}`;
+        return getFileUrl(company, filename);
     }
 
     function handleFileSelect(event: Event) {

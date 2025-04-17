@@ -10,7 +10,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     '/embed',
     '/embed/leadform/[id]',
     '/invite/accept/[id]',
-    '/embed/leadbox/[id]'
+    '/embed/leadbox/[id]',
+    '/api/twilio/webhook',
+    '/api/twilio/webhook/sms'
   ];
   
   const rolePermissions = {

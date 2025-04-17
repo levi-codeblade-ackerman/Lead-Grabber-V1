@@ -5,11 +5,12 @@
     import { toast } from "svelte-sonner";
     import { goto } from '$app/navigation';
     import { invalidateAll } from '$app/navigation';
+    import type { ActionResult } from '@sveltejs/kit';
 
     let loading = $state(false);
 
     function handleEnhance() {
-        return async ({ result, update }) => {
+        return async ({ result, update }: { result: ActionResult, update: () => Promise<void> }) => {
             loading = false;
             
             if (result.type === 'failure') {
@@ -19,8 +20,16 @@
             
             if (result.type === 'success') {
                 toast.success('Company created successfully!');
+                
+                // Wait for invalidation to ensure data is updated
                 await invalidateAll();
-                goto('/settings/company');
+                
+                // Navigate to home page after a short delay
+                setTimeout(() => {
+                    goto('/settings/company');
+                }, 500);
+                
+                return;
             }
             
             await update();

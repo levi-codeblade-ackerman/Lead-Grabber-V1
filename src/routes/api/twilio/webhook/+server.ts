@@ -1,150 +1,103 @@
 import { pb } from '$lib/pocketbase';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createOrUpdateContact } from '$lib/utils/contacts';
 import twilio from 'twilio';
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
 export const POST: RequestHandler = async ({ request }) => {
   console.log('🔔 Webhook endpoint reached');
-  console.log('Request headers:', Object.fromEntries(request.headers));
   
   try {
-    const formData = await request.formData();
-    console.log('📨 Received form data:', Object.fromEntries(formData));
+    let from: string | undefined;
+    let body: string | undefined;
+    let inReplyTo: string | undefined;
 
-    const from = formData.get('From')?.toString();
-    const body = formData.get('Body')?.toString();
-    const to = formData.get('To')?.toString();
+    const contentType = request.headers.get('content-type');
+    
+    if (contentType?.includes('application/json')) {
+      const jsonData = await request.json();
+      from = jsonData.From?.toString();
+      body = jsonData.Body?.toString();
+      inReplyTo = jsonData.InReplyTo?.toString();
+    } else {
+      const formData = await request.formData();
+      from = formData.get('From')?.toString();
+      body = formData.get('Body')?.toString();
+      inReplyTo = formData.get('InReplyTo')?.toString();
+    }
 
-    console.log('📱 SMS Details:', { from, to, body });
+    console.log('📨 Received message:', { from, body, inReplyTo });
 
-    if (!from || !body || !to) {
-      console.error('❌ Missing required fields:', { from, body, to });
+    if (!from || !body) {
+      console.error('❌ Missing required fields');
       return json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Find the company by the Twilio phone number
-    console.log('🔍 Looking for company with Twilio number:', to);
-    const company = await pb.collection('companies').getFirstListItem(`settings.twilio_phone_number="${to}"`);
-    if (!company) {
-      console.error('❌ No company found for Twilio number:', to);
-      return json({ error: 'Company not found' }, { status: 404 });
-    }
-    console.log('🏢 Found company:', { id: company.id, name: company.name });
-
-    // Create or update contact
-    console.log('👤 Creating/updating contact for phone:', from);
-    const contact = await createOrUpdateContact({
-      company_id: company.id,
-      phone: from,
-      name: '', // Can be updated later through the UI
-    });
-
-    if (!contact) {
-      console.error('❌ Failed to create/update contact');
-      throw new Error('Failed to create/update contact');
-    }
-    console.log('✅ Contact created/updated:', contact);
-
-    // Find existing thread or create new one
+    // Try to find the thread
     let thread;
     try {
-      console.log('🔍 Looking for existing thread');
-      thread = await pb.collection('messages').getFirstListItem(`
-        company_id="${company.id}" && 
-        customer_id="${contact.id}" && 
-        thread_id != "" && 
-        created >= "${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}"
-      `);
-      console.log('📜 Found existing thread:', thread);
-    } catch (err) {
-      console.log('📝 No recent thread found, will create new one');
-    }
+      // First try to find by thread_id if inReplyTo is provided
+      if (inReplyTo) {
+        try {
+          thread = await pb.collection('messages').getFirstListItem(`thread_id = "${inReplyTo}"`);
+          console.log('📜 Found thread by ID:', thread.id);
+        } catch (err) {
+          console.log('Thread not found by ID, falling back to phone number');
+        }
+      }
 
-    // Create message record
-    const messageData = {
-      company_id: company.id,
-      customer_id: contact.id,
-      thread_id: thread?.thread_id || crypto.randomUUID(),
-      direction: 'inbound',
-      channel: 'sms',
-      content: body,
-      status: 'unread',
-      messages: thread?.messages || [],
-    };
+      // If thread not found by ID, try phone number
+      if (!thread) {
+        const normalizedPhone = from.replace('+', '');
+        console.log('📱 Trying phone number:', normalizedPhone);
 
-    // Add the new message to the messages array
-    messageData.messages.push({
-      content: body,
-      direction: 'inbound',
-      timestamp: new Date().toISOString(),
-    });
+        const threads = await pb.collection('messages').getList(1, 1, {
+          filter: `customer_phone = "${from}"`,
+          sort: '-created'
+        });
 
-    console.log('💾 Saving message:', messageData);
-    // Create or update the message thread
-    const savedMessage = await pb.collection('messages').create(messageData);
-    console.log('✅ Message saved:', savedMessage);
+        if (threads.items.length > 0) {
+          thread = threads.items[0];
+          console.log('📜 Found thread by phone:', thread.id);
+        }
+      }
 
-    // Create TwiML response
-    const twiml = new MessagingResponse();
-    
-    // Get auto-reply settings from company
-    console.log('⚙️ Getting auto-reply settings');
-    const settings = typeof company.settings === 'string' 
-      ? JSON.parse(company.settings) 
-      : company.settings;
-    console.log('📋 Company settings:', settings);
+      if (!thread) {
+        console.error('❌ No thread found');
+        return json({ error: 'No conversation thread found' }, { status: 404 });
+      }
 
-    if (settings?.autoReply?.textAutoReply) {
-      const currentHour = new Date().getHours();
-      const businessHours = settings.autoReply.businessHours || {};
-      const isBusinessHours = currentHour >= (businessHours.start || 9) && 
-                            currentHour < (businessHours.end || 17);
+      // Update the thread with the new message
+      const currentMessages = Array.isArray(thread.messages) ? thread.messages : [];
+      const updatedMessages = [...currentMessages, {
+        content: body,
+        timestamp: new Date().toISOString(),
+        is_agent_reply: false
+      }];
 
-      console.log('⏰ Business hours check:', {
-        currentHour,
-        businessHours,
-        isBusinessHours
+      const savedMessage = await pb.collection('messages').update(thread.id, {
+        messages: updatedMessages,
+        status: 'new'  // Mark as new since customer replied
       });
 
-      const replyMessage = isBusinessHours 
-        ? settings.autoReply.businessHoursMessage 
-        : settings.autoReply.afterHoursMessage;
+      console.log('✅ Message saved:', savedMessage.id);
 
-      if (replyMessage) {
-        console.log('↩️ Sending auto-reply:', replyMessage);
-        twiml.message(replyMessage);
-      }
+      // Return TwiML response
+      const twiml = new MessagingResponse();
+      return new Response(twiml.toString(), {
+        headers: { 'Content-Type': 'text/xml' }
+      });
+
+    } catch (error) {
+      console.error('❌ Error processing message:', error);
+      return json({ error: 'Failed to process message' }, { status: 500 });
     }
 
-    const response = twiml.toString();
-    console.log('📤 Sending TwiML response:', response);
-
-    // Return TwiML response
-    return new Response(response, {
-      headers: {
-        'Content-Type': 'text/xml',
-      },
-    });
-
   } catch (error) {
-    console.error('❌ Error in webhook:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    });
-    
-    // Even on error, we should return a valid TwiML response
+    console.error('❌ Error:', error);
     const twiml = new MessagingResponse();
-    const response = twiml.toString();
-    console.log('📤 Sending error TwiML response:', response);
-    
-    return new Response(response, {
-      headers: {
-        'Content-Type': 'text/xml',
-      },
+    return new Response(twiml.toString(), {
+      headers: { 'Content-Type': 'text/xml' }
     });
   }
 }; 
