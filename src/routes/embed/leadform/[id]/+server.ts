@@ -191,6 +191,9 @@ export async function GET({ params, request, locals }) {
               : '??';
 
             const messageContent = data.message || '';
+            
+            // Normalize phone number by removing any non-digit characters except leading +
+            const normalizedPhone = data.phone ? data.phone.replace(/[^+\\d]/g, '') : "";
 
             const messageData = {
               customer_name: data.name || "Anonymous",
@@ -199,7 +202,7 @@ export async function GET({ params, request, locals }) {
               message: messageContent,
               source: "leadform",
               status: "new",
-              thread_id: data.phone ? data.phone : crypto.randomUUID(),
+              thread_id: normalizedPhone || crypto.randomUUID(),
               source_url: window.location.href,
               company_id: companyId,
               created: new Date().toISOString(),

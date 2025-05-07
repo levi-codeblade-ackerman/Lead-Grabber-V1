@@ -44,21 +44,25 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'Missing phone number' });
     }
     
+    // Normalize phone number by removing any non-digit characters except leading +
+    const normalizedPhoneNumber = phoneNumber.replace(/[^+\d]/g, '');
+    console.log('Normalized phone number:', normalizedPhoneNumber);
+    
     // Generate a thread ID - use only the customer's phone number
-    let threadId = phoneNumber;
+    let threadId = normalizedPhoneNumber;
     console.log('Generated threadId:', threadId);
     
     try {
-      // Try to find existing thread/customer by phone number
+      // Try to find existing thread by thread_id (which is now the phone number) or customer_phone
       let existingUser;
       try {
         existingUser = await pb.collection('messages').getFirstListItem(
-          `customer_phone="${phoneNumber}"`
+          `thread_id="${normalizedPhoneNumber}" || customer_phone="${normalizedPhoneNumber}"`
         );
         console.log('Found existing thread:', existingUser.id);
       } catch {
         // No existing thread found, which is fine - we'll create one
-        console.log('No existing thread found for:', phoneNumber);
+        console.log('No existing thread found for:', normalizedPhoneNumber);
       }
       
       if (existingUser) {

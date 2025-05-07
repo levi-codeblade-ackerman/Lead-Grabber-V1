@@ -303,6 +303,9 @@ export async function GET({ params, request, locals }) {
               : '??';
 
             const messageContent = data.message || '';
+            
+           
+            const normalizedPhone = data.mobile ? data.mobile.replace(/[^+\\d]/g, '') : "";
 
             const messageData = {
               customer_name: data.name || "Anonymous",
@@ -311,7 +314,7 @@ export async function GET({ params, request, locals }) {
               message: messageContent,
               source: "leadbox",
               status: "new",
-              thread_id: data.mobile ? data.mobile : crypto.randomUUID(),
+              thread_id: normalizedPhone || crypto.randomUUID(),
               source_url: window.location.href,
               company_id: companyId,
               created: new Date().toISOString(),

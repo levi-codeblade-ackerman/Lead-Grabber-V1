@@ -143,8 +143,45 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       }
     }
     
+    // Normalize phone number if available
+    if (messageData.customer_phone) {
+      const normalizedPhone = messageData.customer_phone.replace(/[^+\d]/g, '');
+      
+      // Update both the thread_id and customer_phone for consistency
+      if (normalizedPhone) {
+        messageData.customer_phone = normalizedPhone;
+        
+        // If no thread_id is provided, use the phone number
+        if (!messageData.thread_id) {
+          messageData.thread_id = normalizedPhone;
+        }
+      }
+    }
+    
     // Create the message in PocketBase
-    const existingThread = await pb.collection('messages').getFirstListItem(`thread_id="${messageData.thread_id}"`).catch(() => null);
+    // Try to find existing thread by thread_id or customer_phone
+    let existingThread = null;
+    
+    try {
+      if (messageData.thread_id) {
+        existingThread = await pb.collection('messages').getFirstListItem(`thread_id="${messageData.thread_id}"`).catch(() => null);
+      }
+      
+      // If not found by thread_id and we have a phone number, try to find by phone
+      if (!existingThread && messageData.customer_phone) {
+        existingThread = await pb.collection('messages').getFirstListItem(`customer_phone="${messageData.customer_phone}"`).catch(() => null);
+        
+        // If found by phone, update the thread_id to match the phone for future consistency
+        if (existingThread && !existingThread.thread_id.includes(messageData.customer_phone)) {
+          await pb.collection('messages').update(existingThread.id, {
+            thread_id: messageData.customer_phone
+          });
+          existingThread.thread_id = messageData.customer_phone;
+        }
+      }
+    } catch (error) {
+      console.error('Error finding existing thread:', error);
+    }
 
     if (existingThread) {
       // Append to existing thread
