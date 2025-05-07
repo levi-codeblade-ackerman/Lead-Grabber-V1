@@ -1,23 +1,26 @@
+// Message type definition for the application
 export interface Message {
   id: string;
-  customer_name: string;
+  thread_id: string;
+  customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
-  thread_id: string;
+  status: 'new' | 'read' | 'unread' | 'replied' | 'assigned' | 'closed';
   company_id: string;
-  status: 'new' | 'replied' | 'assigned';
-  source: 'web' | 'leadform' | 'leadbox' | 'agent' | 'email' | 'sms';
-  created: string;
-  initials: string;
-  color: string;
   assigned_to?: string;
+  created: string;
+  updated: string;
+  initials?: string;
+  color?: string;
   messages: {
     content: string;
     timestamp: string;
     is_agent_reply: boolean;
     agent_id?: string;
     agent_name?: string;
+    media?: {
+      url: string;
+      content_type: string;
+    }[];
   }[];
-  form_data?: Record<string, any>;
-  source_url?: string;
 } 

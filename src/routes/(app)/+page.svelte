@@ -12,6 +12,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 	import { toast } from "svelte-sonner";
 	import { goto } from "$app/navigation";
 	import { getUserContext } from "@//contexts/user.js";
+	import type { Message } from "$lib/types/message";
 
   const contextUser = getUserContext()
   console.log('contextUser', $contextUser)
@@ -247,11 +248,11 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             status: 'replied'
           });
 
-          // Send via Twilio if there's a phone number
+          // Send via Telnyx if there's a phone number
           if (existingThread.customer_phone) {
             try {
               console.log('Sending SMS to:', existingThread.customer_phone);
-              const twilioResponse = await fetch('/api/twilio', {
+              const telnyxResponse = await fetch('/api/telnyx', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -261,15 +262,15 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                 })
               });
 
-              const twilioResult = await twilioResponse.json();
-              if (!twilioResult.success) {
-                console.error('Failed to send SMS:', twilioResult.error);
+              const telnyxResult = await telnyxResponse.json();
+              if (!telnyxResult.success) {
+                console.error('Failed to send SMS:', telnyxResult.error);
                 toast.error('Failed to send SMS');
               } else {
                 console.log('SMS sent successfully');
               }
-            } catch (twilioError) {
-              console.error('Error sending SMS:', twilioError);
+            } catch (telnyxError) {
+              console.error('Error sending SMS:', telnyxError);
               toast.error('Failed to send SMS');
             }
           }
