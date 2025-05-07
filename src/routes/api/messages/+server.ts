@@ -163,6 +163,11 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       });
     } else {
       // Create new thread
+      // If we have a phone number, use it as the thread_id
+      if (messageData.customer_phone && !messageData.thread_id) {
+        messageData.thread_id = messageData.customer_phone;
+      }
+      
       record = await pb.collection('messages').create({
         ...messageData,
         messages: [{

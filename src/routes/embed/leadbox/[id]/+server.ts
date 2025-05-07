@@ -311,7 +311,7 @@ export async function GET({ params, request, locals }) {
               message: messageContent,
               source: "leadbox",
               status: "new",
-              thread_id: crypto.randomUUID(),
+              thread_id: data.mobile ? data.mobile : crypto.randomUUID(),
               source_url: window.location.href,
               company_id: companyId,
               created: new Date().toISOString(),

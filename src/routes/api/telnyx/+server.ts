@@ -4,7 +4,7 @@ import { TELNYX_API_KEY, TELNYX_PHONE_NUMBER, TELNYX_MESSAGING_PROFILE_ID } from
 import { PUBLIC_BASE_URL } from '$env/static/public';
 
 export const POST: RequestHandler = async ({ request }) => {
-  const { message, phoneNumber, threadId } = await request.json();
+  const { message, phoneNumber } = await request.json();
   
   try {
     // Your Telnyx phone number (from your Messaging Profile)
@@ -63,7 +63,7 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ 
       success: true, 
       telnyxId: result.data?.id, 
-      threadId 
+      threadId: formattedPhoneNumber
     });
   } catch (error) {
     console.error('Telnyx API error:', error);

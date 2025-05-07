@@ -44,13 +44,8 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'Missing phone number' });
     }
     
-    // Get the destination number (our Telnyx number)
-    const toNumber = Array.isArray(messageData.to) 
-      ? messageData.to[0].phone_number 
-      : messageData.to?.phone_number;
-    
-    // Generate a thread ID
-    let threadId = `${toNumber}_${phoneNumber}`;
+    // Generate a thread ID - use only the customer's phone number
+    let threadId = phoneNumber;
     console.log('Generated threadId:', threadId);
     
     try {

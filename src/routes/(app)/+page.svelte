@@ -262,7 +262,7 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                 body: JSON.stringify({
                   message,
                   phoneNumber: existingThread.customer_phone,
-                  threadId: existingThread.thread_id
+                  threadId: existingThread.customer_phone
                 })
               });
 
