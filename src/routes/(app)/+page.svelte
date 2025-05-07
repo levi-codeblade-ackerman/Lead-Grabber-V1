@@ -246,25 +246,13 @@ import HeaderTag from "$lib/components/header-tag.svelte";
 
         if (!message || !selectedMessage) return;
 
-        // Clear input immediately
+        // Clear input immediately for better UX
         input.value = '';
 
         try {
           const existingThread = await pb.collection('messages').getFirstListItem(`thread_id="${selectedMessage.thread_id}"`);
           
-          // Update the thread with the new message
-          const updatedThread = await pb.collection('messages').update(existingThread.id, {
-            messages: [...existingThread.messages, {
-              content: message,
-              timestamp: new Date().toISOString(),
-              is_agent_reply: true,
-              agent_id: user.id,
-              agent_name: user.name
-            }],
-            status: 'replied'
-          });
-
-          // Send via Telnyx if there's a phone number
+          // First attempt to send via Telnyx if there's a phone number
           if (existingThread.customer_phone) {
             try {
               console.log('Sending SMS to:', existingThread.customer_phone);
@@ -281,15 +269,29 @@ import HeaderTag from "$lib/components/header-tag.svelte";
               const telnyxResult = await telnyxResponse.json();
               if (!telnyxResult.success) {
                 console.error('Failed to send SMS:', telnyxResult.error);
-                toast.error('Failed to send SMS');
-              } else {
-                console.log('SMS sent successfully');
+                toast.error('Failed to send SMS: ' + telnyxResult.error);
+                return; // Stop here, don't update database if SMS fails
               }
+              
+              console.log('SMS sent successfully');
             } catch (telnyxError) {
               console.error('Error sending SMS:', telnyxError);
-              toast.error('Failed to send SMS');
+              toast.error('Failed to send SMS: Network error');
+              return; // Stop here, don't update database if SMS fails
             }
           }
+          
+          // Only update the database if SMS was sent successfully or if no phone number
+          const updatedThread = await pb.collection('messages').update(existingThread.id, {
+            messages: [...existingThread.messages, {
+              content: message,
+              timestamp: new Date().toISOString(),
+              is_agent_reply: true,
+              agent_id: user.id,
+              agent_name: user.name
+            }],
+            status: 'replied'
+          });
           
           // Update the messages list with the new thread
           messages = messages.map(msg => 
@@ -298,6 +300,8 @@ import HeaderTag from "$lib/components/header-tag.svelte";
           
           // Update chat messages
           await loadChatMessages(selectedMessage.thread_id);
+          
+          toast.success('Message sent successfully');
 
         } catch (err) {
           console.error('Error sending message:', err);

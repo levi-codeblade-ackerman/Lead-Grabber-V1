@@ -61,7 +61,8 @@ export const POST: RequestHandler = async ({ request }) => {
           `customer_phone="${phoneNumber}"`
         );
         console.log('Found existing thread:', existingUser.id);
-      } catch (_) {
+      } catch {
+        // No existing thread found, which is fine - we'll create one
         console.log('No existing thread found for:', phoneNumber);
       }
       
