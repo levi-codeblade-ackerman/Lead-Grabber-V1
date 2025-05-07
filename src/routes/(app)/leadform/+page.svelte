@@ -511,7 +511,11 @@ function handleDndFinalize(e: CustomEvent<DndEvent<FormElement>>) {
     
     <div class="relative mt-4">
       <pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
-        {getLeadformEmbedCode(data.form?.id ?? '')}
+        {#if data.form?.id}
+            {getLeadformEmbedCode(data.form?.id ?? '')}
+        {:else}
+            <p class="text-red-500 text-xl">You need to save a leadform first to get an embed code</p>
+        {/if}
       </pre>
       
       <Button 

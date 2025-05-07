@@ -395,7 +395,11 @@ use:enhance={() => {
     
     <div class="relative mt-4">
       <pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
+        {#if data.leadbox?.id}
         {getLeadboxEmbedCode(data.leadbox?.id ?? '')}
+        {:else}
+        <p class="text-red-500 text-xl">You need to save a leadbox first to get an embed code</p>
+        {/if}
       </pre>
       
       <Button 
