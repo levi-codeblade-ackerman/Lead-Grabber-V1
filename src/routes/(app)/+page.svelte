@@ -162,18 +162,18 @@ import HeaderTag from "$lib/components/header-tag.svelte";
             return;
           }
 
-          chatMessages = thread.messages.map((msg: any, index: number) => ({
+          chatMessages = thread.messages.map((msg: any) => ({
             sender: msg.is_agent_reply ? msg.agent_name || 'Agent' : thread.customer_name,
             message: msg.content,
-            phone: index === 0 ? thread.customer_phone : undefined,  // Only show contact info for first message
-            email: index === 0 ? thread.customer_email : undefined,  // Only show contact info for first message
+            phone: thread.customer_phone,  // Only show contact info for first message
+            email: thread.customer_email,  // Only show contact info for first message
             time: new Date(msg.timestamp).toLocaleTimeString([], { 
               hour: '2-digit', 
               minute: '2-digit' 
             }),
             isYou: msg.is_agent_reply,
             timestamp: msg.timestamp
-          })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          })).sort(sortByTimestamp);
 
         } catch (err) {
           console.error('Error loading chat messages:', err);
@@ -184,25 +184,41 @@ import HeaderTag from "$lib/components/header-tag.svelte";
       }
 
       // Helper function to format message consistently
-      function formatMessage(msg: Message) {
+      function formatMessage(msg: any): Message & { name: string; message: string; time: string; } {
         const lastMessage = msg.messages[msg.messages.length - 1];
+        const initials = msg.customer_name?.split(' ').map((n: string) => n[0]).join('') || '??';
+        const name = msg.customer_name || 'Unknown';
+        const messageText = lastMessage?.content || '';
+        const time = new Date(lastMessage?.timestamp || msg.created).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        const color = msg.color || 'bg-primary';
+        
         return {
-          initials: msg.initials || (msg.customer_name?.split(' ').map((n: string) => n[0]).join('') || '??'),
-          name: msg.customer_name || 'Unknown',
-          message: lastMessage?.content || '',
-          time: new Date(lastMessage?.timestamp || msg.created).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          }),
-          color: msg.color || 'bg-primary',
           id: msg.id,
           thread_id: msg.thread_id,
-          created: msg.created,
-          assigned_to: msg.assigned_to,
+          customer_name: msg.customer_name,
           customer_phone: msg.customer_phone,
           customer_email: msg.customer_email,
-          status: msg.status
+          company_id: msg.company_id || '',
+          messages: msg.messages || [],
+          status: msg.status || 'new',
+          created: msg.created,
+          updated: msg.updated || msg.created,
+          assigned_to: msg.assigned_to,
+          initials,
+          color,
+          // Additional properties for UI display
+          name,
+          message: messageText,
+          time
         };
+      }
+
+      // Update the sort function to use proper types
+      function sortByTimestamp(a: { timestamp: string }, b: { timestamp: string }): number {
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
       }
 
       // Function to select a message and load its chat history
@@ -455,10 +471,10 @@ import HeaderTag from "$lib/components/header-tag.svelte";
                                 </div>
                                 <div class="flex-grow">
                                     <div class="flex items-center justify-between">
-                                        <h4 class="text-lg font-medium">{msg.name}</h4>
-                                        <span class="font-medium">{msg.time}</span>
+                                        <h4 class="text-lg font-medium">{(msg as any).name}</h4>
+                                        <span class="font-medium">{(msg as any).time}</span>
                                     </div>
-                                    <p class="font-light line-clamp-2">{msg.message}</p>
+                                    <p class="font-light line-clamp-2">{(msg as any).message}</p>
                                     {#if msg.assigned_to}
                                         <div class="mt-1 text-sm text-gray-500">
                                             Assigned to: {companyMembers.find(m => m.id === msg.assigned_to)?.name || 'Unknown'}

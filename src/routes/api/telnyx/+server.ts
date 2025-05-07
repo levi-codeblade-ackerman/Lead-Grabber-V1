@@ -1,19 +1,24 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { TELNYX_API_KEY, TELNYX_PHONE_NUMBER } from '$env/static/private';
+import { TELNYX_API_KEY, TELNYX_PHONE_NUMBER, TELNYX_MESSAGING_PROFILE_ID } from '$env/static/private';
 import { PUBLIC_BASE_URL } from '$env/static/public';
 
 export const POST: RequestHandler = async ({ request }) => {
   const { message, phoneNumber, threadId } = await request.json();
   
   try {
-    // Get your API key from environment variable
-    
     // Your Telnyx phone number (from your Messaging Profile)
     const fromNumber = TELNYX_PHONE_NUMBER;
     
     // Format phone number - remove any non-digit characters except leading +
     const formattedPhoneNumber = phoneNumber.replace(/[^+\d]/g, '');
+    
+    // Log the request being sent to Telnyx
+    console.log('Sending to Telnyx:', {
+      from: fromNumber,
+      to: formattedPhoneNumber,
+      profileId: TELNYX_MESSAGING_PROFILE_ID
+    });
     
     // Call Telnyx API to send SMS
     const response = await fetch('https://api.telnyx.com/v2/messages', {
@@ -26,17 +31,22 @@ export const POST: RequestHandler = async ({ request }) => {
         from: fromNumber,
         to: formattedPhoneNumber,
         text: message,
+        messaging_profile_id: TELNYX_MESSAGING_PROFILE_ID, // Required for SMS/MMS
         webhook_url: `${PUBLIC_BASE_URL}/api/telnyx/webhook`, 
         webhook_failover_url: `${PUBLIC_BASE_URL}/api/telnyx/webhook-backup`,
-        // Use threading reference ID if messaging profile ID isn't what you need
-        reference_id: threadId
+        use_profile_webhooks: false, // Use our custom webhooks instead of profile defaults
+        type: 'SMS', // Explicitly set message type
+        reference_id: threadId // Your reference ID for tracking
       })
     });
     
     const result = await response.json();
+    console.log('Telnyx API response:', result);
     
     if (!response.ok) {
-      throw new Error(result.errors?.[0]?.detail || 'Failed to send message');
+      const errorDetail = result.errors?.[0]?.detail || 'Failed to send message';
+      console.error('Telnyx API error:', errorDetail, result);
+      throw new Error(errorDetail);
     }
     
     return json({ success: true, telnyxId: result.data?.id, threadId });

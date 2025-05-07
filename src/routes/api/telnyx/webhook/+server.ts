@@ -10,70 +10,121 @@ async function handleWebhook(request: Request) {
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const payload = await request.json();
+    // Log the raw request body for debugging
+    const rawBody = await request.text();
+    console.log('Webhook raw body:', rawBody);
     
-    // Verify webhook (optional but recommended)
-    // You can use Telnyx's public key to verify the signature
+    // Parse the webhook payload
+    const payload = JSON.parse(rawBody);
+    console.log('Webhook payload:', payload);
     
-    // Handle inbound SMS
-    if (payload.data.event_type === 'message.received') {
-      const message = payload.data.payload;
-      
-      // Extract info from the incoming message
-      const phoneNumber = message.from.phone_number;
-      const content = message.text;
-      const media = message.media || [];
-      
-      // Generate a thread ID or find existing thread
-      let threadId = message.to[0].phone_number + '_' + phoneNumber;
-      
-      try {
-        // Try to find existing thread/customer by phone number
-        const existingUser = await pb.collection('messages').getFirstListItem(
-          `customer_phone="${phoneNumber}"`
-        );
-        
-        if (existingUser) {
-          threadId = existingUser.thread_id;
-          
-          // Update existing thread with new message
-          await pb.collection('messages').update(existingUser.id, {
-            messages: [...existingUser.messages, {
-              content,
-              timestamp: new Date().toISOString(),
-              is_agent_reply: false,
-              media: media.length > 0 ? media : undefined
-            }],
-            status: 'unread'
-          });
-        } else {
-          // Get first admin/company user
-          const adminUser = await pb.collection('users').getFirstListItem('role="owner"');
-          
-          // Create new thread for new customer
-          await pb.collection('messages').create({
-            thread_id: threadId,
-            customer_phone: phoneNumber,
-            customer_name: 'Unknown Customer', // You can update this later
-            messages: [{
-              content,
-              timestamp: new Date().toISOString(),
-              is_agent_reply: false,
-              media: media.length > 0 ? media : undefined
-            }],
-            status: 'new',
-            company_id: adminUser?.company_id || '' // Default to empty string if no company found
-          });
-        }
-        
-        return json({ success: true });
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        return json({ success: false, error: dbError instanceof Error ? dbError.message : String(dbError) }, { status: 500 });
-      }
+    // Check if this is a Telnyx event webhook or direct inbound message
+    let messageData;
+    
+    if (payload.data?.event_type === 'message.received') {
+      // This is a webhook event format
+      console.log('Processing webhook event:', payload.data.event_type);
+      messageData = payload.data.payload;
+    } else if (payload.record_type === 'message' && payload.direction === 'inbound') {
+      // This is the direct message format you showed in your logs
+      console.log('Processing direct inbound message');
+      messageData = payload;
+    } else {
+      console.log('Unknown webhook format or not an inbound message:', payload);
+      return json({ success: true }); // Always return success to Telnyx
     }
     
-    return json({ success: true });
+    // Now extract the message details regardless of format
+    const phoneNumber = messageData.from?.phone_number || messageData.from;
+    const content = messageData.text;
+    const media = messageData.media || [];
+    
+    if (!phoneNumber) {
+      console.error('Missing phone number in webhook:', messageData);
+      return json({ success: false, error: 'Missing phone number' });
+    }
+    
+    // Get the destination number (our Telnyx number)
+    const toNumber = Array.isArray(messageData.to) 
+      ? messageData.to[0].phone_number 
+      : messageData.to?.phone_number;
+    
+    // Generate a thread ID
+    let threadId = `${toNumber}_${phoneNumber}`;
+    console.log('Generated threadId:', threadId);
+    
+    try {
+      // Try to find existing thread/customer by phone number
+      let existingUser;
+      try {
+        existingUser = await pb.collection('messages').getFirstListItem(
+          `customer_phone="${phoneNumber}"`
+        );
+        console.log('Found existing thread:', existingUser.id);
+      } catch (_) {
+        console.log('No existing thread found for:', phoneNumber);
+      }
+      
+      if (existingUser) {
+        threadId = existingUser.thread_id;
+        
+        // Update existing thread with new message
+        const updatedUser = await pb.collection('messages').update(existingUser.id, {
+          messages: [...existingUser.messages, {
+            content,
+            timestamp: new Date().toISOString(),
+            is_agent_reply: false,
+            media: media.length > 0 ? media : undefined
+          }],
+          status: 'unread'
+        });
+        
+        console.log('Updated existing thread:', updatedUser.id);
+      } else {
+        // Get first admin/company user
+        let adminUser;
+        try {
+          adminUser = await pb.collection('users').getFirstListItem('role="owner"');
+          console.log('Found admin user:', adminUser.id);
+        } catch (err) {
+          console.error('No admin user found:', err);
+        }
+        
+        if (!adminUser?.company_id) {
+          console.error('No company ID found for admin');
+          return json({ success: false, error: 'No company found' });
+        }
+        
+        // Extract name from message if possible (like your example "Hello, I'm new customer, Jack")
+        let customerName = 'Unknown Customer';
+        const nameMatch = content.match(/(?:I'm|I am)\s+(?:new\s+customer,\s+)?([A-Za-z]+)/i);
+        if (nameMatch && nameMatch[1]) {
+          customerName = nameMatch[1];
+        }
+        
+        // Create new thread for new customer
+        const newThread = await pb.collection('messages').create({
+          thread_id: threadId,
+          customer_phone: phoneNumber,
+          customer_name: customerName,
+          messages: [{
+            content,
+            timestamp: new Date().toISOString(),
+            is_agent_reply: false,
+            media: media.length > 0 ? media : undefined
+          }],
+          status: 'new',
+          company_id: adminUser.company_id
+        });
+        
+        console.log('Created new thread:', newThread.id);
+      }
+      
+      return json({ success: true });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      return json({ success: false, error: dbError instanceof Error ? dbError.message : String(dbError) }, { status: 500 });
+    }
   } catch (error) {
     console.error('Webhook processing error:', error);
     return json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
