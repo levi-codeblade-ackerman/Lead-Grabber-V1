@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { pb } from '$lib/pocketbase';
 
 // Define the hardcoded company ID
-const HARDCODED_COMPANY_ID = 'p2aryh9oqlwx4zu';
+const HARDCODED_COMPANY_ID = '6h4zpjhqip1d50b';
 
 // Define the handleWebhook function used by PUT
 async function handleWebhook(request: Request) {
@@ -82,7 +82,7 @@ export const POST: RequestHandler = async ({ request }) => {
             is_agent_reply: false,
             media: media.length > 0 ? media : undefined
           }],
-          status: 'unread'
+          status: 'new'
         });
         
         console.log('Updated existing thread:', updatedUser.id);
@@ -97,26 +97,36 @@ export const POST: RequestHandler = async ({ request }) => {
         // Create new thread with hardcoded company ID
         console.log('Creating new thread with hardcoded company ID:', HARDCODED_COMPANY_ID);
         
-        const newThread = await pb.collection('messages').create({
-          thread_id: threadId,
-          customer_phone: phoneNumber,
-          customer_name: customerName,
-          messages: [{
-            content,
-            timestamp: new Date().toISOString(),
-            is_agent_reply: false,
-            media: media.length > 0 ? media : undefined
-          }],
-          status: 'new',
-          company_id: HARDCODED_COMPANY_ID, // Use the hardcoded company ID
-          source: 'sms', // Add source field
-          color: 'bg-primary', // Add a default color
-          initials: customerName.substring(0, 2).toUpperCase(), // Generate initials from name
-          form_data: {}, // Empty form data as it's from SMS
-          source_url: '' // No source URL for SMS
-        });
-        
-        console.log('Created new thread:', newThread.id);
+        try {
+          const newThread = await pb.collection('messages').create({
+            thread_id: threadId,
+            customer_phone: phoneNumber,
+            customer_name: customerName,
+            messages: [{
+              content,
+              timestamp: new Date().toISOString(),
+              is_agent_reply: false,
+              media: media.length > 0 ? media : undefined
+            }],
+            status: 'new',
+            company_id: HARDCODED_COMPANY_ID,
+            source: 'sms', 
+            color: 'bg-primary',
+            initials: customerName.substring(0, 2).toUpperCase(),
+            form_data: {},
+            source_url: ''
+          });
+          
+          console.log('Created new thread:', newThread.id);
+        } catch (error) {
+          // Log detailed error information
+          console.error('Failed to create thread, error:', error);
+          
+          return json({ 
+            success: false, 
+            error: 'Failed to create message thread. Check server logs for details.'
+          }, { status: 500 });
+        }
       }
       
       return json({ success: true });
