@@ -3,6 +3,9 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { pb } from '$lib/pocketbase';
 
+// Define the hardcoded company ID
+const HARDCODED_COMPANY_ID = 'p2aryh9oqlwx4zu';
+
 // Define the handleWebhook function used by PUT
 async function handleWebhook(request: Request) {
   return await POST({ request } as Parameters<typeof POST>[0]);
@@ -53,13 +56,18 @@ export const POST: RequestHandler = async ({ request }) => {
     console.log('Generated threadId:', threadId);
     
     try {
-      // Try to find existing thread by thread_id (which is now the phone number) or customer_phone
+      // Try to find existing thread by thread_id or customer_phone
       let existingUser;
       try {
-        existingUser = await pb.collection('messages').getFirstListItem(
-          `thread_id="${normalizedPhoneNumber}" || customer_phone="${normalizedPhoneNumber}"`
-        );
-        console.log('Found existing thread:', existingUser.id);
+        // First try by thread_id (most specific match)
+        try {
+          existingUser = await pb.collection('messages').getFirstListItem(`thread_id="${normalizedPhoneNumber}"`);
+          console.log('Found existing thread by thread_id:', existingUser.id);
+        } catch {
+          // If not found by thread_id, try by phone number
+          existingUser = await pb.collection('messages').getFirstListItem(`customer_phone="${normalizedPhoneNumber}"`);
+          console.log('Found existing thread by phone number:', existingUser.id);
+        }
       } catch {
         // No existing thread found, which is fine - we'll create one
         console.log('No existing thread found for:', normalizedPhoneNumber);
@@ -86,8 +94,8 @@ export const POST: RequestHandler = async ({ request }) => {
           customerName = nameMatch[1];
         }
         
-        // Create new thread without requiring admin/company
-        console.log('Creating new thread with default company');
+        // Create new thread with hardcoded company ID
+        console.log('Creating new thread with hardcoded company ID:', HARDCODED_COMPANY_ID);
         
         const newThread = await pb.collection('messages').create({
           thread_id: threadId,
@@ -100,7 +108,12 @@ export const POST: RequestHandler = async ({ request }) => {
             media: media.length > 0 ? media : undefined
           }],
           status: 'new',
-          company_id: 'p2aryh9oqlwx4zu' // hardcoded for now
+          company_id: HARDCODED_COMPANY_ID, // Use the hardcoded company ID
+          source: 'sms', // Add source field
+          color: 'bg-primary', // Add a default color
+          initials: customerName.substring(0, 2).toUpperCase(), // Generate initials from name
+          form_data: {}, // Empty form data as it's from SMS
+          source_url: '' // No source URL for SMS
         });
         
         console.log('Created new thread:', newThread.id);
