@@ -2,7 +2,7 @@
 	import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 	import { useSidebar } from "$lib/components/ui/sidebar/index.js";
-	import { Home, Users, ChartColumnBig, Smartphone, BookOpen, Settings, ChevronDown, ChevronUp, SquareSlash, Reply, Building } from "lucide-svelte";
+	import { Home, Users, ChartColumnBig, Smartphone, BookOpen, Settings, ChevronDown, ChevronUp, SquareSlash, Reply, Building, Phone } from "lucide-svelte";
 	import { page } from "$app/stores";
     import { Button } from "$lib/components/ui/button/index";
 	import { slide } from "svelte/transition";
@@ -13,6 +13,7 @@
 		{ title: "Inbox", url: "/inbox", icon: Home, href: "/" },
 		{ title: "Contacts", url: "/contacts", icon: Users, href: "/contacts" },
 		{ title: "Reports", url: "/reports", icon: ChartColumnBig, href: "/reports" },
+		{ title: "Calls", url: "/dialer", icon: Phone, href: "/dialer" },
 		{ title: "Leadbox", url: "/leadbox", icon: Smartphone, href: "/leadbox" },
 		{ title: "Leadform", url: "/leadform", icon: BookOpen, href: "/leadform" },
 		{ title: "Settings", url: "/settings", icon: Settings, href: "/settings", 
