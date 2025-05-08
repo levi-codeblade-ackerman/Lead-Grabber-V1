@@ -49,7 +49,7 @@ export const POST: RequestHandler = async ({ request }) => {
     console.log('Normalized phone number:', normalizedPhoneNumber);
     
     // Generate a thread ID - use only the customer's phone number
-    let threadId = normalizedPhoneNumber;
+    const threadId = normalizedPhoneNumber;
     console.log('Generated threadId:', threadId);
     
     try {
@@ -66,8 +66,6 @@ export const POST: RequestHandler = async ({ request }) => {
       }
       
       if (existingUser) {
-        threadId = existingUser.thread_id;
-        
         // Update existing thread with new message
         const updatedUser = await pb.collection('messages').update(existingUser.id, {
           messages: [...existingUser.messages, {
@@ -81,20 +79,6 @@ export const POST: RequestHandler = async ({ request }) => {
         
         console.log('Updated existing thread:', updatedUser.id);
       } else {
-        // Get first admin/company user
-        let adminUser;
-        try {
-          adminUser = await pb.collection('users').getFirstListItem('role="owner"');
-          console.log('Found admin user:', adminUser.id);
-        } catch (err) {
-          console.error('No admin user found:', err);
-        }
-        
-        if (!adminUser?.company_id) {
-          console.error('No company ID found for admin');
-          return json({ success: false, error: 'No company found' });
-        }
-        
         // Extract name from message if possible (like your example "Hello, I'm new customer, Jack")
         let customerName = 'Unknown Customer';
         const nameMatch = content.match(/(?:I'm|I am)\s+(?:new\s+customer,\s+)?([A-Za-z]+)/i);
@@ -102,7 +86,9 @@ export const POST: RequestHandler = async ({ request }) => {
           customerName = nameMatch[1];
         }
         
-        // Create new thread for new customer
+        // Create new thread without requiring admin/company
+        console.log('Creating new thread with default company');
+        
         const newThread = await pb.collection('messages').create({
           thread_id: threadId,
           customer_phone: phoneNumber,
@@ -114,7 +100,7 @@ export const POST: RequestHandler = async ({ request }) => {
             media: media.length > 0 ? media : undefined
           }],
           status: 'new',
-          company_id: adminUser.company_id
+          company_id: 'p2aryh9oqlwx4zu' // hardcoded for now
         });
         
         console.log('Created new thread:', newThread.id);
