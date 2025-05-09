@@ -29,8 +29,16 @@ export const POST: RequestHandler = async ({ request }) => {
         connection_id: TELNYX_CONNECTION_ID,
         to: formattedPhone,
         from: from,
-        audio_url: 'https://example.com/greeting.wav', // Optional: URL for audio to play when answered
-        client_state: clientId ? btoa(JSON.stringify({ clientId })) : undefined
+        send_silence_when_idle: false, // Ensures continuous audio
+        media_encryption: 'SRTP', // Secure media encryption
+        client_state: clientId ? btoa(JSON.stringify({ clientId })) : undefined,
+        webhook_url: `${request.headers.get('origin')}/api/telnyx/call-webhook`, // Ensure webhooks are properly routed
+        // Optional: Enable answering machine detection if needed
+        answering_machine_detection: 'detect',
+        answering_machine_detection_config: {
+          total_analysis_time_millis: 5000,
+          after_greeting_silence_millis: 800
+        }
       })
     });
     

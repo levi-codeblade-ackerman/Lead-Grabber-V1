@@ -28,9 +28,22 @@ export const POST: RequestHandler = async ({ request }) => {
         console.log('Call answered:', callControlId);
         await logCallEvent(callControlId, 'answered', body.data?.payload);
         
-        // Optional: You can play audio when the call is answered
+        // Ensure audio bridge is established in both directions by sending an empty 'speak' command
         if (callControlId) {
-          await playAudio(callControlId);
+          try {
+            await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/answer`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TELNYX_API_KEY}`
+              },
+              body: JSON.stringify({})
+            });
+            
+            console.log('Call answer action sent to ensure bidirectional audio');
+          } catch (error) {
+            console.error('Error ensuring bidirectional audio:', error);
+          }
         }
         break;
         
@@ -48,6 +61,11 @@ export const POST: RequestHandler = async ({ request }) => {
           console.log('Answering machine detected, leaving a message');
           // Logic for leaving a voicemail
           await logCallEvent(callControlId, 'machine-detection-machine', body.data?.payload);
+          
+          // Optional: Leave a message for answering machine
+          if (callControlId) {
+            await playAudio(callControlId, "This is an automated message from Clearsky. Please call us back at your convenience.");
+          }
         } else if (detectionResult === 'human') {
           console.log('Human answered, connecting call');
           // Logic for human answer
@@ -71,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 };
 
-async function playAudio(callControlId: string): Promise<void> {
+async function playAudio(callControlId: string, message: string = ''): Promise<void> {
   try {
     await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/speak`, {
       method: 'POST',
@@ -80,7 +98,7 @@ async function playAudio(callControlId: string): Promise<void> {
         'Authorization': `Bearer ${TELNYX_API_KEY}`
       },
       body: JSON.stringify({
-        payload: "Hello, this is an automated call. Please hold for an important message.",
+        payload: message || "Hello, this is an automated call. Please hold for an important message.",
         voice: "female",
         language: "en-US"
       })
@@ -97,7 +115,7 @@ async function logCallEvent(callId: string, status: string, payload: Record<stri
     let clientId = null;
     if (payload.client_state) {
       try {
-        const clientState = JSON.parse(payload.client_state);
+        const clientState = JSON.parse(atob(payload.client_state));
         clientId = clientState.clientId;
       } catch (err) {
         console.error('Error parsing client state:', err);
