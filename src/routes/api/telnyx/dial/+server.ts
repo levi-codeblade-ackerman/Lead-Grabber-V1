@@ -30,7 +30,6 @@ export const POST: RequestHandler = async ({ request }) => {
         to: formattedPhone,
         from: from,
         send_silence_when_idle: false, // Ensures continuous audio
-        media_encryption: 'SRTP', // Secure media encryption
         client_state: clientId ? btoa(JSON.stringify({ clientId })) : undefined,
         webhook_url: `${request.headers.get('origin')}/api/telnyx/call-webhook`, // Ensure webhooks are properly routed
         // Optional: Enable answering machine detection if needed

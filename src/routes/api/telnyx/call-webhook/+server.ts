@@ -109,13 +109,13 @@ async function playAudio(callControlId: string, message: string = ''): Promise<v
 }
 
 // Log call events to your database
-async function logCallEvent(callId: string, status: string, payload: Record<string, any>): Promise<void> {
+async function logCallEvent(callId: string, status: string, payload: Record<string, unknown>): Promise<void> {
   try {
     // Extract client state if available
     let clientId = null;
     if (payload.client_state) {
       try {
-        const clientState = JSON.parse(atob(payload.client_state));
+        const clientState = JSON.parse(atob(payload.client_state as string));
         clientId = clientState.clientId;
       } catch (err) {
         console.error('Error parsing client state:', err);
@@ -141,7 +141,7 @@ async function logCallEvent(callId: string, status: string, payload: Record<stri
 
 // Also add this for PUT, GET, OPTIONS methods for Telnyx webhook validation
 export const GET: RequestHandler = () => json({ success: true });
-export const PUT: RequestHandler = async ({ request }) => {
-  return await POST({ request } as any);
+export const PUT: RequestHandler = async (event) => {
+  return await POST(event);
 };
 export const OPTIONS: RequestHandler = () => json({ success: true }); 
